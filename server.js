@@ -14,10 +14,22 @@ const FERRETERIAS_API = {
   sinsa: 'www.sinsa.com.ni'
 };
 
-// ── Rutas de archivos estáticos ─────────────────────────────────────────────
+// ── Rutas de archivos estáticos y tipos MIME ────────────────────────────────
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.svg':  'image/svg+xml',
+  '.ico':  'image/svg+xml',
+  '.png':  'image/png',
+  '.json': 'application/json; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.js':   'application/javascript; charset=utf-8'
+};
+
 const STATIC_ROUTES = {
   '/':                                           'index.html',
   '/index.html':                                 'index.html',
+  '/favicon.ico':                                'favicon-sinsa.svg',
+  '/favicon-sinsa.svg':                          'favicon-sinsa.svg',
   '/ferreterias/sinsa/sinsa-presupuestos.html':  'ferreterias/sinsa/sinsa-presupuestos.html',
   '/ferreterias/sinsa/sinsa-descuentos.html':    'ferreterias/sinsa/sinsa-descuentos.html',
 };
@@ -68,7 +80,9 @@ http.createServer((req, res) => {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
       return res.end('Archivo no encontrado: ' + file);
     }
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    const ext = path.extname(file).toLowerCase();
+    const contentType = MIME_TYPES[ext] || 'text/html; charset=utf-8';
+    res.writeHead(200, { 'content-type': contentType });
     res.end(data);
   });
 
