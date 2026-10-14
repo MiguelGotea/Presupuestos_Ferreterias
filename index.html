@@ -88,125 +88,13 @@
         radial-gradient(circle at 10% 90%, #f7f1e7 0%, transparent 40%);
     }
 
-    /* ── BARRA SUPERIOR ─────────────────── */
-    .top-nav {
-      width: 100%;
-      border-bottom: 1px solid var(--border);
-      background: rgba(250, 247, 242, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-
-    .top-nav-inner {
-      max-width: 1060px;
-      margin: 0 auto;
-      padding: 14px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .nav-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-      color: var(--tx-main);
-    }
-
-    .brand-mark {
-      width: 32px;
-      height: 32px;
-      border-radius: var(--radius-sm);
-      background: linear-gradient(135deg, #c4622d, #d97706);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #ffffff;
-      font-weight: 800;
-      font-size: 14px;
-      box-shadow: 0 2px 8px rgba(196, 98, 45, 0.28);
-    }
-
-    .brand-title {
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-
-    .brand-title span {
-      font-weight: 400;
-      color: var(--tx-muted);
-    }
-
-    .nav-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: #ffffff;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-pill);
-      padding: 5px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--tx-sub);
-      box-shadow: var(--shadow-sm);
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #22c55e;
-      position: relative;
-    }
-
-    .status-dot::after {
-      content: '';
-      position: absolute;
-      inset: -2px;
-      border-radius: 50%;
-      background: rgba(34, 197, 94, 0.35);
-      animation: pulse 2.2s infinite;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(1); opacity: 0.8; }
-      50% { transform: scale(1.8); opacity: 0; }
-      100% { transform: scale(1); opacity: 0; }
-    }
-
     /* ── HERO ───────────────────────────── */
     .hero {
       width: 100%;
       max-width: 1060px;
       margin: 0 auto;
-      padding: 56px 24px 32px;
+      padding: 68px 24px 32px;
       text-align: center;
-    }
-
-    .hero-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: var(--warm-accent-light);
-      border: 1px solid rgba(196, 98, 45, 0.2);
-      border-radius: var(--radius-pill);
-      padding: 5px 14px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--warm-accent);
-      letter-spacing: 0.02em;
-      margin-bottom: 20px;
-    }
-
-    .hero-pill svg {
-      width: 14px;
-      height: 14px;
     }
 
     .hero h1 {
@@ -645,12 +533,8 @@
 
     /* ── RESPONSIVE ─────────────────────── */
     @media (max-width: 640px) {
-      .top-nav-inner {
-        padding: 12px 16px;
-      }
-
       .hero {
-        padding: 36px 16px 24px;
+        padding: 44px 16px 24px;
       }
 
       .content-wrap {
@@ -670,20 +554,6 @@
 </head>
 
 <body>
-
-  <!-- BARRA SUPERIOR -->
-  <header class="top-nav">
-    <div class="top-nav-inner">
-      <a href="/" class="nav-brand">
-        <div class="brand-mark">PF</div>
-        <div class="brand-title">Presupuestos <span>· Ferreterías</span></div>
-      </a>
-      <div class="nav-status">
-        <span class="status-dot"></span>
-        <span>Servidor Activo</span>
-      </div>
-    </div>
-  </header>
 
   <!-- HERO -->
   <section class="hero">
