@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promociones y Descuentos · Sinsa</title>
+<meta name="description" content="Catálogo de ofertas, promociones de temporada y descuentos por volumen en Sinsa.">
+<link rel="icon" type="image/svg+xml" href="/favicon-sinsa.svg">
+<link rel="shortcut icon" href="/favicon-sinsa.svg">
+
+<!-- Open Graph / WhatsApp / Redes Sociales -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Promociones y Descuentos · Sinsa">
+<meta property="og:description" content="Consulta listas de descuentos por escala de compra y promociones vigentes en Sinsa.">
+<meta property="og:site_name" content="Presupuestos Ferreterías">
+<meta property="og:image" content="https://b2csinsa.vtexassets.com/assets/vtex/assets-builder/b2csinsa.store-theme/4.0.16/img/20240919-logo-superior___51c25e88f36f56881a0ce642224ed5c7.svg">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Promociones y Descuentos · Sinsa">
+<meta name="twitter:description" content="Consulta listas de descuentos por escala de compra y promociones vigentes en Sinsa.">
+<meta name="twitter:image" content="https://b2csinsa.vtexassets.com/assets/vtex/assets-builder/b2csinsa.store-theme/4.0.16/img/20240919-logo-superior___51c25e88f36f56881a0ce642224ed5c7.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">🏷️ Sinsa <span>Promociones</span></div>
+  <div class="search-wrap">
+    <input id="q" type="search" placeholder="Filtrar por nombre o marca… (dejar vacío para ver todos los descuentos)">
+    <button class="btn btn-disc" id="reload-btn">🔄 Recargar</button>
+  </div>
+  <a href="/ferreterias/sinsa/presupuestos/" class="back-link">← Presupuestos</a>
+  <a href="/" class="back-link" style="margin-left:4px;">↩ Ferreterías</a>
+</header>
+
+<!-- BARRA DE ESTADO -->
+<div class="stats-bar">
+  <div class="stat-item">
+    <div class="stat-val" id="stat-total">0</div>
+    <div class="stat-label">Con descuento</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" id="stat-max">0%</div>
+    <div class="stat-label">Mayor descuento</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" id="stat-avg">0%</div>
+    <div class="stat-label">Descuento promedio</div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+    <div class="loading-bar"><div class="loading-fill" id="load-fill"></div></div>
+    <div id="status-msg">Iniciando exploración del catálogo…</div>
+  </div>
+</div>
+
+<div class="panel">
+  <!-- FILTROS -->
+  <div class="filter-bar">
+    <label>Ordenar:</label>
+    <select id="sort-sel">
+      <option value="disc">Mayor descuento %</option>
+      <option value="saving">Mayor ahorro C$</option>
+      <option value="price-asc">Menor precio</option>
+      <option value="price-desc">Mayor precio</option>
+    </select>
+    <span class="filter-count" id="filter-count"></span>
+  </div>
+  <div id="results"><div class="empty">Cargando productos con descuento…</div></div>
+  <button id="more" class="btn btn-sec" hidden>Cargar más productos del catálogo</button>
+</div>
+
+<div id="modal"><div class="modal-box" id="mbox"></div></div>
+
+<!-- Popover flotante para filtro de columnas (Marca y Unidad) -->
+<div id="col-filter-popover" class="col-filter-popover">
+  <div class="popover-head">
+    <span id="popover-title">Filtrar</span>
+    <button type="button" id="popover-close" class="popover-close-btn" title="Cerrar">&times;</button>
+  </div>
+  <div class="popover-quick">
+    <button type="button" id="popover-all" class="popover-link-btn">Todas</button>
+    <span class="popover-sep">|</span>
+    <button type="button" id="popover-none" class="popover-link-btn">Ninguna</button>
+    <span class="popover-sep">|</span>
+    <button type="button" id="popover-reset" class="popover-link-btn">Restablecer</button>
+  </div>
+  <div class="popover-search-wrap">
+    <input type="text" id="popover-search" placeholder="Buscar opción…" autocomplete="off">
+  </div>
+  <div class="popover-list" id="popover-list"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

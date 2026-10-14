@@ -14,7 +14,7 @@ const FERRETERIAS_API = {
   sinsa: 'www.sinsa.com.ni'
 };
 
-// ── Rutas de archivos estáticos y tipos MIME ────────────────────────────────
+// ── Tipos MIME permitidos ───────────────────────────────────────────────────
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.svg':  'image/svg+xml',
@@ -25,19 +25,32 @@ const MIME_TYPES = {
   '.js':   'application/javascript; charset=utf-8'
 };
 
-const STATIC_ROUTES = {
-  '/':                                           'index.html',
-  '/index.html':                                 'index.html',
-  '/favicon.ico':                                'favicon.svg',
-  '/favicon.svg':                                'favicon.svg',
-  '/favicon-sinsa.svg':                          'favicon-sinsa.svg',
-  '/ferreterias/sinsa/sinsa-presupuestos.html':  'ferreterias/sinsa/sinsa-presupuestos.html',
-  '/ferreterias/sinsa/sinsa-descuentos.html':    'ferreterias/sinsa/sinsa-descuentos.html',
+// ── Redirecciones / Retrocompatibilidad ─────────────────────────────────────
+const REDIRECTS = {
+  '/ferreterias/sinsa/sinsa-presupuestos.html': '/ferreterias/sinsa/presupuestos/',
+  '/ferreterias/sinsa/sinsa-descuentos.html':   '/ferreterias/sinsa/descuentos/',
+  '/ferreterias/sinsa/presupuestos':            '/ferreterias/sinsa/presupuestos/',
+  '/ferreterias/sinsa/descuentos':               '/ferreterias/sinsa/descuentos/'
+};
+
+// ── Alias específicos de rutas estáticas ────────────────────────────────────
+const ALIASES = {
+  '/':                   'index.html',
+  '/index.html':         'index.html',
+  '/favicon.ico':        'favicon.svg',
+  '/favicon.svg':        'favicon.svg',
+  '/favicon-sinsa.svg':  'favicon-sinsa.svg'
 };
 
 http.createServer((req, res) => {
   const url      = new URL(req.url, `http://localhost`);
-  const pathname = url.pathname;
+  const pathname = decodeURIComponent(url.pathname);
+
+  // ── Redirecciones ─────────────────────────────────────────────────────────
+  if (REDIRECTS[pathname]) {
+    res.writeHead(301, { 'Location': REDIRECTS[pathname] });
+    return res.end();
+  }
 
   // ── Proxy API Sinsa (/api/sinsa/*) ────────────────────────────────────────
   if (pathname.startsWith('/api/sinsa/')) {
@@ -69,22 +82,35 @@ http.createServer((req, res) => {
   }
 
   // ── Archivos estáticos ────────────────────────────────────────────────────
-  const file = STATIC_ROUTES[pathname];
+  let relPath = ALIASES[pathname] || pathname.replace(/^\/+/, '');
+  let fullPath = path.resolve(__dirname, relPath);
 
-  if (!file) {
-    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-    return res.end('404 - Página no encontrada');
+  // Seguridad: evitar directory traversal
+  if (!fullPath.startsWith(__dirname)) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+    return res.end('403 - Acceso denegado');
   }
 
-  fs.readFile(path.join(__dirname, file), (err, data) => {
+  fs.stat(fullPath, (err, stats) => {
     if (err) {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      return res.end('Archivo no encontrado: ' + file);
+      return res.end('404 - Archivo no encontrado');
     }
-    const ext = path.extname(file).toLowerCase();
-    const contentType = MIME_TYPES[ext] || 'text/html; charset=utf-8';
-    res.writeHead(200, { 'content-type': contentType });
-    res.end(data);
+
+    if (stats.isDirectory()) {
+      fullPath = path.join(fullPath, 'index.html');
+    }
+
+    fs.readFile(fullPath, (err2, data) => {
+      if (err2) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+        return res.end('404 - Archivo no encontrado');
+      }
+      const ext = path.extname(fullPath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'text/html; charset=utf-8';
+      res.writeHead(200, { 'content-type': contentType });
+      res.end(data);
+    });
   });
 
 }).listen(PORT, () => {
@@ -92,7 +118,7 @@ http.createServer((req, res) => {
   console.log('  🏗️  Presupuestos Ferreterías — servidor listo');
   console.log('  ─────────────────────────────────────────────');
   console.log('  Landing:            http://localhost:' + PORT + '/');
-  console.log('  Sinsa presupuestos: http://localhost:' + PORT + '/ferreterias/sinsa/sinsa-presupuestos.html');
-  console.log('  Sinsa descuentos:   http://localhost:' + PORT + '/ferreterias/sinsa/sinsa-descuentos.html');
+  console.log('  Sinsa presupuestos: http://localhost:' + PORT + '/ferreterias/sinsa/presupuestos/');
+  console.log('  Sinsa descuentos:   http://localhost:' + PORT + '/ferreterias/sinsa/descuentos/');
   console.log('');
 });
