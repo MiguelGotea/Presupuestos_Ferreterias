@@ -60,9 +60,9 @@ async function search(reset = true) {
     if (r.status === 503) {
       const j = await r.json().catch(() => ({}));
       $('#results').innerHTML = `<div class="empty" style="line-height:2">
-        🔧 <strong>Error del servidor</strong><br>
-        <span style="font-size:11px;color:var(--mu)">${esc(j.message || 'Error desconocido')}</span><br><br>
-        <button class="btn btn-primary" onclick="search(true)" style="font-size:12px">🔄 Reintentar</button>
+        🛡️ <strong>Fetesa protegida por Cloudflare</strong><br>
+        <span style="font-size:11px;color:var(--mu)">${esc(j.message || 'El servidor del VPS no puede acceder a fetesa.com.ni')}</span><br><br>
+        <a href="https://fetesa.com.ni/?s=${encodeURIComponent(query)}&et_search=true&post_type=product" target="_blank" rel="noopener" class="btn btn-primary" style="font-size:12px">🌐 Buscar directamente en Fetesa ↗</a>
       </div>`;
       $('#count').textContent = '';
       return;
@@ -80,8 +80,9 @@ async function search(reset = true) {
   } catch (e) {
     if (e.name === 'AbortError') return;
     $('#results').innerHTML = `<div class="empty" style="line-height:1.9">
-      ❌ <strong>Error:</strong> ${esc(e.message)}<br>
-      <button class="btn btn-primary" onclick="search(true)" style="font-size:12px;margin-top:8px">🔄 Reintentar</button>
+      🛡️ <strong>Fetesa.com.ni bloqueó el acceso</strong><br>
+      <span style="font-size:11px;color:var(--mu)">Cloudflare bloquea las IPs de servidor (DigitalOcean).</span><br>
+      <a href="https://fetesa.com.ni/?s=${encodeURIComponent(query)}&et_search=true&post_type=product" target="_blank" rel="noopener" class="btn btn-primary" style="font-size:12px;margin-top:8px">🌐 Abrir en Fetesa ↗</a>
     </div>`;
     $('#count').textContent = '';
   }
