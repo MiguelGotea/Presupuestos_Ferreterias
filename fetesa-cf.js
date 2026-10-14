@@ -103,23 +103,33 @@ async function refreshCfCookies() {
       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
     );
 
-    // Cargar homepage para resolver el JS challenge de Cloudflare
-    console.log('[fetesa-cf] 🔄 Cargando fetesa.com.ni (resolviendo CF challenge)...');
-    await page.goto('https://fetesa.com.ni/', {
-      waitUntil: 'networkidle2',
-      timeout: 25000,
-    });
+    // Cargar homepage para resolver el JS challenge de Cloudflare.
+    // ⚠️ NO usar 'networkidle2' — el JS Challenge hace muchos requests y
+    //    supera el timeout. Usamos 'domcontentloaded' + espera manual.
+    console.log('[fetesa-cf] 🔄 Cargando fetesa.com.ni...');
+    try {
+      await page.goto('https://fetesa.com.ni/', {
+        waitUntil: 'domcontentloaded',
+        timeout: 45000,
+      });
+    } catch (navErr) {
+      // Incluso si hay timeout en la navegación, el CF challenge puede
+      // haber establecido cookies ya. Continuamos y verificamos.
+      console.log(`[fetesa-cf] ⚠️ Navigation warn: ${navErr.message} — verificando cookies igualmente...`);
+    }
 
-    // Esperar hasta 15 segundos a que cf_clearance aparezca
+    // Esperar hasta 20 segundos a que CF resuelva el challenge y setee cf_clearance
+    console.log('[fetesa-cf] ⏳ Esperando resolución del CF challenge...');
     let allCookies = [];
-    for (let i = 0; i < 15; i++) {
-      allCookies = await page.cookies('https://fetesa.com.ni');
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      allCookies = await page.cookies('https://fetesa.com.ni').catch(() => []);
       const hasClearance = allCookies.some(c => c.name === 'cf_clearance');
       if (hasClearance) {
         console.log(`[fetesa-cf] ✅ cf_clearance obtenido en ${i + 1}s`);
         break;
       }
-      await new Promise(r => setTimeout(r, 1000));
+      if (i % 5 === 4) console.log(`[fetesa-cf] ... esperando CF (${i + 1}s)`);
     }
 
     if (!allCookies.length) {
