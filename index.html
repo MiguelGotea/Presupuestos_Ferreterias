@@ -4,23 +4,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Presupuestos Ferreterías</title>
+  <title>Presupuestos Ferreterías · Pitaya</title>
   <meta name="description"
-    content="Catálogo de herramientas de presupuesto para ferreterías. Consulta precios y descuentos en tiempo real.">
+    content="Herramienta interna para cotización, consulta de precios y monitoreo de descuentos en ferreterías.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22263a;
-      --border: rgba(255, 255, 255, .08);
-      --accent: #4f8ef7;
-      --accent2: #6c63ff;
-      --tx: #e8eaf0;
-      --mu: #8b91a8;
-      --radius: 18px;
-      --shadow: 0 8px 40px rgba(0, 0, 0, .45);
+      /* Paleta cálida minimalista */
+      --bg: #faf7f2;
+      --bg-alt: #f4efe8;
+      --card-bg: #ffffff;
+      --card-hover: #fdfcf9;
+      
+      --border: #e8e2d8;
+      --border-subtle: #f0ebe2;
+      --border-focus: #c4622d;
+
+      --tx-main: #221f1d;
+      --tx-sub: #6b645c;
+      --tx-muted: #999084;
+
+      --warm-accent: #c4622d;
+      --warm-accent-light: #fbeee7;
+      --warm-amber: #d97706;
+      --warm-amber-light: #fef3c7;
+
+      /* Identidad Sinsa */
+      --sinsa-green: #45a834;
+      --sinsa-green-dark: #3a8e2b;
+      --sinsa-green-light: #ebf8e9;
+      --sinsa-green-border: #bce5b5;
+
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-pill: 9999px;
+
+      --shadow-sm: 0 1px 3px rgba(60, 45, 30, 0.05);
+      --shadow-md: 0 4px 18px -2px rgba(60, 45, 30, 0.06), 0 2px 6px -1px rgba(60, 45, 30, 0.03);
+      --shadow-hover: 0 16px 36px -6px rgba(70, 50, 30, 0.1), 0 6px 14px -3px rgba(70, 50, 30, 0.05);
+      --shadow-sinsa: 0 6px 20px rgba(69, 168, 52, 0.25);
+
+      --transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     *,
@@ -32,156 +59,433 @@
     }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       background: var(--bg);
-      color: var(--tx);
+      color: var(--tx-main);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background-image: 
+        radial-gradient(ellipse 90% 60% at 50% -10%, #f3ece0 0%, transparent 75%),
+        radial-gradient(circle at 10% 90%, #f7f1e7 0%, transparent 40%);
+    }
+
+    /* ── BARRA SUPERIOR ─────────────────── */
+    .top-nav {
+      width: 100%;
+      border-bottom: 1px solid var(--border);
+      background: rgba(250, 247, 242, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .top-nav-inner {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
       align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--tx-main);
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #c4622d, #d97706);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(196, 98, 45, 0.28);
+    }
+
+    .brand-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-title span {
+      font-weight: 400;
+      color: var(--tx-muted);
+    }
+
+    .nav-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--tx-sub);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      position: relative;
+    }
+
+    .status-dot::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 50%;
+      background: rgba(34, 197, 94, 0.35);
+      animation: pulse 2.2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 0; }
     }
 
     /* ── HERO ───────────────────────────── */
     .hero {
       width: 100%;
-      padding: 72px 24px 48px;
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 56px 24px 32px;
       text-align: center;
-      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(79, 142, 247, .18) 0%, transparent 70%);
-      border-bottom: 1px solid var(--border);
     }
 
-    .hero-badge {
+    .hero-pill {
       display: inline-flex;
       align-items: center;
       gap: 7px;
-      background: rgba(79, 142, 247, .12);
-      border: 1px solid rgba(79, 142, 247, .3);
-      border-radius: 999px;
+      background: var(--warm-accent-light);
+      border: 1px solid rgba(196, 98, 45, 0.2);
+      border-radius: var(--radius-pill);
       padding: 5px 14px;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
-      color: var(--accent);
-      letter-spacing: .04em;
-      text-transform: uppercase;
-      margin-bottom: 22px;
-    }
-
-    .hero-badge::before {
-      content: '⬡';
-      font-size: 13px;
-    }
-
-    .hero h1 {
-      font-size: clamp(32px, 6vw, 56px);
-      font-weight: 800;
-      line-height: 1.1;
-      letter-spacing: -.02em;
-      background: linear-gradient(135deg, #e8eaf0 30%, #4f8ef7 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 16px;
-    }
-
-    .hero p {
-      font-size: 16px;
-      color: var(--mu);
-      max-width: 480px;
-      margin: 0 auto;
-      line-height: 1.6;
-    }
-
-    /* ── GRID DE FERRETERIAS ─────────────── */
-    .section {
-      width: 100%;
-      max-width: 960px;
-      padding: 48px 24px 80px;
-    }
-
-    .section-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--mu);
-      letter-spacing: .08em;
-      text-transform: uppercase;
+      color: var(--warm-accent);
+      letter-spacing: 0.02em;
       margin-bottom: 20px;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 16px;
+    .hero-pill svg {
+      width: 14px;
+      height: 14px;
     }
 
-    /* ── CARD ───────────────────────────── */
-    .card {
-      background: var(--surface);
+    .hero h1 {
+      font-size: clamp(32px, 5.2vw, 52px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      color: var(--tx-main);
+      margin-bottom: 16px;
+    }
+
+    .hero h1 .highlight {
+      background: linear-gradient(135deg, var(--warm-accent), var(--warm-amber));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: clamp(15px, 2vw, 17px);
+      color: var(--tx-sub);
+      max-width: 580px;
+      margin: 0 auto 32px;
+      line-height: 1.6;
+    }
+
+    /* ── BARRA DE BÚSQUEDA Y FILTRO ─────── */
+    .search-filter-bar {
+      max-width: 520px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .search-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 16px;
+      color: var(--tx-muted);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-input {
+      width: 100%;
+      background: #ffffff;
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 28px 24px;
+      border-radius: var(--radius-pill);
+      padding: 13px 44px 13px 44px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--tx-main);
+      box-shadow: var(--shadow-sm);
+      outline: none;
+      transition: var(--transition);
+    }
+
+    .search-input::placeholder {
+      color: var(--tx-muted);
+    }
+
+    .search-input:focus {
+      border-color: var(--warm-accent);
+      box-shadow: 0 0 0 4px rgba(196, 98, 45, 0.12), var(--shadow-sm);
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 14px;
+      background: none;
+      border: none;
+      color: var(--tx-muted);
+      font-size: 16px;
+      cursor: pointer;
+      display: none;
+      padding: 4px;
+      line-height: 1;
+    }
+
+    .search-clear:hover {
+      color: var(--tx-main);
+    }
+
+    /* ── SECCIÓN DE FERRETERÍAS ─────────── */
+    .content-wrap {
+      width: 100%;
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 24px 24px 80px;
+      flex: 1;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+      padding: 0 4px;
+    }
+
+    .section-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--tx-main);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .count-badge {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 2px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--tx-sub);
+    }
+
+    /* ── GRID DE TARJETAS ───────────────── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    /* ── TARJETA GENERAL ────────────────── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 26px 24px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 18px;
       text-decoration: none;
       color: inherit;
-      transition: border-color .2s, transform .2s, box-shadow .2s;
       position: relative;
+      box-shadow: var(--shadow-md);
+      transition: var(--transition);
       overflow: hidden;
     }
 
-    .card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, var(--card-c1, #4f8ef7), var(--card-c2, #6c63ff));
-      opacity: 0;
-      transition: opacity .25s;
-      border-radius: inherit;
-    }
-
     .card:hover {
-      border-color: rgba(79, 142, 247, .4);
-      transform: translateY(-3px);
-      box-shadow: 0 16px 48px rgba(0, 0, 0, .4), 0 0 0 1px rgba(79, 142, 247, .2);
+      background: var(--card-hover);
+      border-color: #d8cec0;
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-hover);
     }
 
-    .card:hover::before {
-      opacity: .06;
+    /* Tarjetas Sinsa Específicas */
+    .card.card-sinsa {
+      border-color: var(--border);
     }
 
-    .card>* {
-      position: relative;
-      z-index: 1;
+    .card.card-sinsa:hover {
+      border-color: rgba(69, 168, 52, 0.45);
+      box-shadow: 0 16px 36px -6px rgba(50, 110, 40, 0.12), 0 0 0 1px rgba(69, 168, 52, 0.2);
     }
 
-    .card-icon {
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    /* ÍCONO / LOGO SINSA CON FONDO VERDE */
+    .sinsa-brand-badge {
+      background: var(--sinsa-green);
+      background-image: linear-gradient(145deg, #48b136 0%, #3e982d 100%);
+      border-radius: 12px;
+      padding: 8px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 48px;
+      box-shadow: var(--shadow-sinsa);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
+      transition: var(--transition);
+    }
+
+    .sinsa-brand-badge img {
+      height: 26px;
+      width: auto;
+      display: block;
+      object-fit: contain;
+    }
+
+    .card:hover .sinsa-brand-badge {
+      transform: scale(1.04);
+      box-shadow: 0 8px 24px rgba(69, 168, 52, 0.35);
+    }
+
+    /* ÍCONOS PARA OTRAS FERRETERÍAS / PLACEHOLDERS */
+    .generic-badge {
       width: 48px;
       height: 48px;
-      border-radius: 14px;
+      border-radius: 12px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
-      background: rgba(255, 255, 255, .05);
+      font-size: 22px;
+      flex-shrink: 0;
+      color: var(--tx-sub);
+    }
+
+    .status-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      letter-spacing: 0.03em;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-pill.active {
+      background: var(--sinsa-green-light);
+      color: #27671d;
+      border: 1px solid var(--sinsa-green-border);
+    }
+
+    .status-pill.active::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--sinsa-green);
+    }
+
+    .status-pill.soon {
+      background: var(--bg-alt);
+      color: var(--tx-muted);
       border: 1px solid var(--border);
     }
 
-    .card-body h2 {
-      font-size: 17px;
+    /* CUERPO DE LA TARJETA */
+    .card-body {
+      flex: 1;
+    }
+
+    .card-provider {
+      font-size: 11px;
       font-weight: 700;
-      margin-bottom: 5px;
+      color: var(--warm-accent);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+
+    .card-provider.sinsa {
+      color: var(--sinsa-green-dark);
+    }
+
+    .card-body h2 {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--tx-main);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .card-body p {
-      font-size: 13px;
-      color: var(--mu);
-      line-height: 1.5;
+      font-size: 13.5px;
+      color: var(--tx-sub);
+      line-height: 1.55;
     }
 
+    /* PIE DE TARJETA */
     .card-footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-subtle);
       margin-top: auto;
     }
 
@@ -192,69 +496,159 @@
     }
 
     .tag {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       padding: 3px 9px;
-      border-radius: 999px;
-      background: rgba(79, 142, 247, .12);
-      color: var(--accent);
-      border: 1px solid rgba(79, 142, 247, .2);
-      letter-spacing: .03em;
+      border-radius: var(--radius-pill);
+      background: var(--bg);
+      color: var(--tx-sub);
+      border: 1px solid var(--border);
     }
 
-    .tag.green {
-      background: rgba(52, 199, 89, .12);
-      color: #34c759;
-      border-color: rgba(52, 199, 89, .2);
+    .tag.promo {
+      background: var(--warm-amber-light);
+      color: #92400e;
+      border-color: #fde68a;
     }
 
-    .card-arrow {
-      width: 32px;
-      height: 32px;
+    .card-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--tx-main);
+      white-space: nowrap;
+      transition: var(--transition);
+    }
+
+    .action-circle {
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, .06);
+      background: var(--bg-alt);
       border: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
-      transition: background .2s, transform .2s;
-      flex-shrink: 0;
+      font-size: 13px;
+      transition: var(--transition);
     }
 
-    .card:hover .card-arrow {
-      background: var(--accent);
-      border-color: var(--accent);
-      transform: translateX(2px);
+    .card:hover .action-circle {
+      background: var(--warm-accent);
+      border-color: var(--warm-accent);
+      color: #ffffff;
+      transform: translateX(3px);
     }
 
-    /* ── COMING SOON ────────────────────── */
+    .card.card-sinsa:hover .action-circle {
+      background: var(--sinsa-green);
+      border-color: var(--sinsa-green);
+      color: #ffffff;
+    }
+
+    /* ESTADO PRÓXIMAMENTE */
     .card.soon {
-      opacity: .45;
-      pointer-events: none;
+      background: #faf8f5;
+      opacity: 0.72;
+      border-style: dashed;
     }
 
-    .card.soon .card-arrow {
-      opacity: 0;
+    .card.soon:hover {
+      transform: none;
+      box-shadow: var(--shadow-sm);
+      border-color: var(--border);
+      background: #faf8f5;
+    }
+
+    .card.soon .card-action-btn {
+      color: var(--tx-muted);
+    }
+
+    /* MENSAJE NO RESULTADOS */
+    .no-results {
+      grid-column: 1 / -1;
+      padding: 48px 20px;
+      text-align: center;
+      background: #ffffff;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-lg);
+      display: none;
+    }
+
+    .no-results h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--tx-main);
+      margin-bottom: 6px;
+    }
+
+    .no-results p {
+      font-size: 13px;
+      color: var(--tx-muted);
     }
 
     /* ── FOOTER ─────────────────────────── */
     footer {
       width: 100%;
       border-top: 1px solid var(--border);
-      padding: 20px 24px;
+      background: #ffffff;
+      padding: 24px;
       text-align: center;
-      font-size: 12px;
-      color: var(--mu);
+      margin-top: auto;
     }
 
-    @media (max-width: 480px) {
-      .hero {
-        padding: 48px 20px 36px;
+    .footer-inner {
+      max-width: 1060px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: var(--tx-muted);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .footer-link {
+      color: var(--tx-sub);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .footer-link:hover {
+      color: var(--warm-accent);
+    }
+
+    /* ── RESPONSIVE ─────────────────────── */
+    @media (max-width: 640px) {
+      .top-nav-inner {
+        padding: 12px 16px;
       }
 
-      .section {
-        padding: 32px 16px 60px;
+      .hero {
+        padding: 36px 16px 24px;
+      }
+
+      .content-wrap {
+        padding: 16px 16px 60px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .card {
+        padding: 20px 18px;
       }
     }
   </style>
@@ -262,68 +656,230 @@
 
 <body>
 
+  <!-- BARRA SUPERIOR -->
+  <header class="top-nav">
+    <div class="top-nav-inner">
+      <a href="/" class="nav-brand">
+        <div class="brand-mark">P</div>
+        <div class="brand-title">Pitaya <span>· Ferreterías</span></div>
+      </a>
+      <div class="nav-status">
+        <span class="status-dot"></span>
+        <span>Servidor Activo</span>
+      </div>
+    </div>
+  </header>
+
   <!-- HERO -->
   <section class="hero">
-    <div class="hero-badge">Herramientas Internas</div>
-    <h1>Presupuestos<br>Ferreterías</h1>
-    <p>Consulta precios, genera presupuestos y revisa descuentos directamente desde el catálogo de cada ferretería.</p>
-  </section>
+    <div class="hero-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M9 21V9" />
+      </svg>
+      <span>Herramienta Operativa Interna</span>
+    </div>
+    <h1>Presupuestos & Cotizaciones <br><span class="highlight">de Ferreterías</span></h1>
+    <p>Consulta catálogos actualizados, cotiza insumos con precios oficiales en tiempo real y revisa descuentos por volumen de cada proveedor.</p>
 
-  <!-- GRID -->
-  <section class="section">
-    <div class="section-title">Ferreterías disponibles</div>
-    <div class="grid">
-
-      <!-- SINSA -->
-      <a class="card" href="/ferreterias/sinsa/sinsa-presupuestos.html" id="card-sinsa"
-        style="--card-c1:#1b6e2e;--card-c2:#28a745;">
-        <div class="card-icon">🏗️</div>
-        <div class="card-body">
-          <h2>Sinsa</h2>
-          <p>Busca materiales, consulta precios actualizados y visualiza los descuentos por volumen disponibles.</p>
-        </div>
-        <div class="card-footer">
-          <div class="card-tags">
-            <span class="tag green">Activa</span>
-            <span class="tag">Presupuestos</span>
-            <span class="tag">Descuentos</span>
-          </div>
-          <div class="card-arrow">→</div>
-        </div>
-      </a>
-
-      <!-- PRÓXIMAMENTE 1 -->
-      <div class="card soon">
-        <div class="card-icon">🔩</div>
-        <div class="card-body">
-          <h2>Próximamente</h2>
-          <p>Se integrará otra ferretería al catálogo. Mantente al tanto de las actualizaciones.</p>
-        </div>
-        <div class="card-footer">
-          <div class="card-tags"><span class="tag">En desarrollo</span></div>
-          <div class="card-arrow">→</div>
-        </div>
+    <!-- Búsqueda rápida minimalista -->
+    <div class="search-filter-bar">
+      <div class="search-input-wrap">
+        <span class="search-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.3-4.3"></path>
+          </svg>
+        </span>
+        <input type="text" id="filter-input" class="search-input" placeholder="Buscar ferretería, cotizador o descuentos..." autocomplete="off">
+        <button id="search-clear" class="search-clear" title="Limpiar búsqueda">&times;</button>
       </div>
-
-      <!-- PRÓXIMAMENTE 2 -->
-      <div class="card soon">
-        <div class="card-icon">🪵</div>
-        <div class="card-body">
-          <h2>Próximamente</h2>
-          <p>Más proveedores de materiales se agregarán conforme se expanda el catálogo.</p>
-        </div>
-        <div class="card-footer">
-          <div class="card-tags"><span class="tag">En desarrollo</span></div>
-          <div class="card-arrow">→</div>
-        </div>
-      </div>
-
     </div>
   </section>
 
+  <!-- LISTADO DE FERRETERÍAS -->
+  <main class="content-wrap">
+    <div class="section-header">
+      <div class="section-title-group">
+        <span class="section-title">Módulos Disponibles</span>
+        <span class="count-badge" id="card-counter">2 Activos</span>
+      </div>
+    </div>
+
+    <div class="grid" id="tools-grid">
+
+      <!-- SINSA: PRESUPUESTOS (PRINCIPAL) -->
+      <a class="card card-sinsa" href="/ferreterias/sinsa/sinsa-presupuestos.html" id="card-sinsa-presupuestos"
+        data-title="sinsa presupuestos cotizador precios en vivo materiales"
+        data-provider="sinsa">
+        <div class="card-top">
+          <!-- Logo oficial de Sinsa sobre fondo verde característico -->
+          <div class="sinsa-brand-badge" title="Ferretería Sinsa">
+            <img src="https://b2csinsa.vtexassets.com/assets/vtex/assets-builder/b2csinsa.store-theme/4.0.16/img/20240919-logo-superior___51c25e88f36f56881a0ce642224ed5c7.svg" alt="Sinsa Nicaragua">
+          </div>
+          <span class="status-pill active">En Línea</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider sinsa">Sinsa · Catálogo Principal</div>
+          <h2>Cotizador de Presupuestos</h2>
+          <p>Busca materiales de construcción, acabados y herramientas con precios en vivo vía API. Permite crear canastas, calcular IVA y exportar cotizaciones.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag">Precios en Vivo</span>
+            <span class="tag">Presupuestos</span>
+            <span class="tag">Exportar</span>
+          </div>
+          <div class="card-action-btn">
+            <span>Abrir</span>
+            <div class="action-circle">→</div>
+          </div>
+        </div>
+      </a>
+
+      <!-- SINSA: PROMOCIONES Y DESCUENTOS -->
+      <a class="card card-sinsa" href="/ferreterias/sinsa/sinsa-descuentos.html" id="card-sinsa-descuentos"
+        data-title="sinsa descuentos promociones rebajas ofertas volumen"
+        data-provider="sinsa">
+        <div class="card-top">
+          <!-- Logo oficial de Sinsa sobre fondo verde característico -->
+          <div class="sinsa-brand-badge" title="Ferretería Sinsa">
+            <img src="https://b2csinsa.vtexassets.com/assets/vtex/assets-builder/b2csinsa.store-theme/4.0.16/img/20240919-logo-superior___51c25e88f36f56881a0ce642224ed5c7.svg" alt="Sinsa Nicaragua">
+          </div>
+          <span class="status-pill active">En Línea</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider sinsa">Sinsa · Ofertas & Escalas</div>
+          <h2>Descuentos y Promociones</h2>
+          <p>Consulta el módulo de descuentos vigentes, promociones de temporada y escalas de ahorro por volumen aplicables a listas de materiales.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag promo">% Descuentos</span>
+            <span class="tag">Promociones</span>
+            <span class="tag">Volumen</span>
+          </div>
+          <div class="card-action-btn">
+            <span>Ver Ofertas</span>
+            <div class="action-circle">→</div>
+          </div>
+        </div>
+      </a>
+
+      <!-- PRÓXIMA FERRETERÍA: FETESA DO IT CENTER -->
+      <div class="card soon" id="card-fetesa" data-title="fetesa do it center ferreteria proximamente">
+        <div class="card-top">
+          <div class="generic-badge">🏗️</div>
+          <span class="status-pill soon">Próximamente</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider">Fetesa Do It Center</div>
+          <h2>Catálogo & Acabados</h2>
+          <p>Integración en desarrollo para consulta de líneas eléctricas, fontanería, herramientas y acabados residenciales.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag">En integración</span>
+            <span class="tag">Ferretería</span>
+          </div>
+          <div class="card-action-btn">
+            <span>Pronto</span>
+            <div class="action-circle">⏳</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRÓXIMA FERRETERÍA: PROVEEDORES DE ACERO Y ESTRUCTURA -->
+      <div class="card soon" id="card-pesados" data-title="acero materiales pesados estructural hierro proximamente">
+        <div class="card-top">
+          <div class="generic-badge">🔩</div>
+          <span class="status-pill soon">Planificado</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider">Materiales Estructurales</div>
+          <h2>Acero y Construcción Pesada</h2>
+          <p>Módulo previsto para cotización de hierro, agregados y materiales a granel directamente por tonelada y flete de entrega.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag">Planificado</span>
+            <span class="tag">Estructura</span>
+          </div>
+          <div class="card-action-btn">
+            <span>Pronto</span>
+            <div class="action-circle">⏳</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MENSAJE VACÍO CUANDO NO HAY COINCIDENCIAS -->
+      <div class="no-results" id="no-results">
+        <h3>No se encontraron módulos</h3>
+        <p>Intenta con otro término como "Sinsa", "Presupuestos" o "Descuentos".</p>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- PIE DE PÁGINA -->
   <footer>
-    Presupuestos Ferreterías · Herramienta interna de uso operativo
+    <div class="footer-inner">
+      <div>Presupuestos Ferreterías · Sistema Interno Pitaya · Entorno Operativo</div>
+      <div class="footer-links">
+        <a href="/ferreterias/sinsa/sinsa-presupuestos.html" class="footer-link">Sinsa Presupuestos</a>
+        <span>·</span>
+        <a href="/ferreterias/sinsa/sinsa-descuentos.html" class="footer-link">Sinsa Descuentos</a>
+      </div>
+    </div>
   </footer>
+
+  <script>
+    // Filtro interactivo en tiempo real
+    const filterInput = document.getElementById('filter-input');
+    const searchClear = document.getElementById('search-clear');
+    const cards = document.querySelectorAll('#tools-grid .card');
+    const noResults = document.getElementById('no-results');
+    const cardCounter = document.getElementById('card-counter');
+
+    function applyFilter() {
+      const query = filterInput.value.trim().toLowerCase();
+      let visibleCount = 0;
+      let activeCount = 0;
+
+      cards.forEach(card => {
+        const text = (card.getAttribute('data-title') || '') + ' ' + card.innerText.toLowerCase();
+        const matches = !query || text.includes(query);
+        
+        card.style.display = matches ? 'flex' : 'none';
+        if (matches) {
+          visibleCount++;
+          if (!card.classList.contains('soon')) activeCount++;
+        }
+      });
+
+      // Mostrar/ocultar botón de limpieza
+      searchClear.style.display = query.length > 0 ? 'block' : 'none';
+
+      // Mostrar mensaje cuando no hay resultados
+      noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+
+      // Actualizar contador
+      if (query) {
+        cardCounter.textContent = visibleCount + (visibleCount === 1 ? ' resultado' : ' resultados');
+      } else {
+        cardCounter.textContent = '2 Activos';
+      }
+    }
+
+    filterInput.addEventListener('input', applyFilter);
+
+    searchClear.addEventListener('click', () => {
+      filterInput.value = '';
+      filterInput.focus();
+      applyFilter();
+    });
+  </script>
 
 </body>
 
