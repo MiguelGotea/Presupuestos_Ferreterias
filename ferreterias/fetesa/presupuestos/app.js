@@ -1,15 +1,8 @@
 // ── CONFIGURACIÓN ──────────────────────────────────────────────────────────
-// Fetesa bloquea el VPS y no tiene CORS headers. Solución: CORS proxies
-// públicos que hacen el fetch desde IPs residenciales/no-VPS.
-// Se prueban en orden hasta que uno funcione.
-const FETESA_API = 'https://fetesa.com.ni/wp-json/wc/store/v1/products';
-
-// CORS proxies públicos (se prueban en orden)
-const CORS_WRAPPERS = [
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  url => `/api/fetesa/wp-json/wc/store/v1/products${url.includes('?') ? url.slice(url.indexOf('?')) : ''}`, // VPS como último recurso
-];
+// El servidor (server.js) usa puppeteer-core + chromium para resolver el
+// Cloudflare JS Challenge de fetesa.com.ni y cachea cf_clearance ~50 min.
+// El cliente solo habla con el proxy local en /api/fetesa/.
+const API_PRODUCTS = '/api/fetesa/wp-json/wc/store/v1/products';
 const PER_PAGE = 12;
 
 const $  = s => document.querySelector(s);
@@ -67,57 +60,52 @@ function norm(p) {
   return raw;
 }
 
-// ── PROXY ACTIVO (persiste entre búsquedas) ────────────────────────────────
-let workingProxyIdx = 0; // empieza por corsproxy.io
-
-async function fetchWithProxy(apiUrl, signal) {
-  // Intentar desde el proxy actual; si falla, probar el siguiente
-  for (let i = workingProxyIdx; i < CORS_WRAPPERS.length; i++) {
-    const proxyUrl = CORS_WRAPPERS[i](apiUrl);
-    try {
-      const r = await fetch(proxyUrl, { signal });
-      if (r.ok || r.status === 404) {
-        workingProxyIdx = i; // guardar el que funcionó
-        return r;
-      }
-      // 403/429 → intentar siguiente proxy
-      console.warn(`Proxy ${i} falló con ${r.status}, intentando siguiente…`);
-    } catch (e) {
-      if (e.name === 'AbortError') throw e;
-      console.warn(`Proxy ${i} error: ${e.message}, intentando siguiente…`);
-    }
-  }
-  throw new Error('Todos los proxies fallaron. Fetesa puede estar caído o bloqueando completamente.');
-}
 
 // ── BÚSQUEDA ───────────────────────────────────────────────────────────────
 async function search(reset = true) {
-  if (reset) { page = 1; products = []; selectedCats = null; workingProxyIdx = 0; }
+  if (reset) { page = 1; products = []; selectedCats = null; }
   if (query.length < 2) { render(); return; }
   ctrl?.abort(); ctrl = new AbortController();
   $('#count').textContent = 'Buscando…';
   try {
-    const apiUrl = `${FETESA_API}?search=${encodeURIComponent(query)}&per_page=${PER_PAGE}&page=${page}&_fields=id,name,slug,permalink,sku,prices,images,categories,attributes,is_in_stock,short_description`;
-    const r = await fetchWithProxy(apiUrl, ctrl.signal);
+    const url = `${API_PRODUCTS}?search=${encodeURIComponent(query)}&per_page=${PER_PAGE}&page=${page}&_fields=id,name,slug,permalink,sku,prices,images,categories,attributes,is_in_stock,short_description`;
+    const r = await fetch(url, { signal: ctrl.signal });
 
-    const total = parseInt(r.headers.get('X-WP-Total') || r.headers.get('x-wp-total') || '0');
+    // 503 = puppeteer no instalado en el servidor
+    if (r.status === 503) {
+      const j = await r.json().catch(() => ({}));
+      const msg = j.message || 'puppeteer-core no instalado';
+      $('#results').innerHTML = `<div class="empty" style="line-height:2">
+        🔧 <strong>Configuración requerida en el servidor</strong><br>
+        <span style="font-size:11px;color:var(--mu)">${esc(msg)}</span><br><br>
+        <code style="font-size:11px;background:#1a1a2e;color:#7ec8e3;padding:6px 10px;border-radius:6px;display:block;text-align:left">
+          npm install puppeteer-core<br>
+          apt-get install -y chromium-browser<br>
+          pm2 restart presupuestos-ferr…
+        </code>
+      </div>`;
+      $('#count').textContent = '';
+      return;
+    }
+
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+
+    const total = parseInt(r.headers.get('x-wp-total') || '0');
     const data  = await r.json();
 
     if (!Array.isArray(data)) {
-      throw new Error(data?.message || data?.code || 'Respuesta inesperada');
+      throw new Error(data?.message || data?.code || 'Respuesta inesperada del servidor');
     }
 
-    const items = data.map(norm);
-    products = products.concat(items);
+    products = products.concat(data.map(norm));
     totalEstimate = total || products.length;
     render();
 
   } catch (e) {
     if (e.name === 'AbortError') return;
     $('#results').innerHTML = `<div class="empty" style="line-height:1.9">
-      ❌ <strong>No se pudo conectar a Fetesa</strong><br>
-      <span style="font-size:11px;color:var(--mu)">${esc(e.message)}</span><br><br>
-      <button class="btn btn-primary" onclick="workingProxyIdx=0;search(true)" style="font-size:12px">🔄 Reintentar todos los proxies</button>
+      ❌ <strong>Error:</strong> ${esc(e.message)}<br>
+      <button class="btn btn-primary" onclick="search(true)" style="font-size:12px;margin-top:8px">🔄 Reintentar</button>
     </div>`;
     $('#count').textContent = '';
   }
