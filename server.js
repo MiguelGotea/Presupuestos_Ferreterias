@@ -55,39 +55,123 @@ http.createServer((req, res) => {
   }
 
   // ── Proxy HTML Fetesa (/api/fetesa/*) ──────────────────────────────────────
-  // Fetesa es WooCommerce; hacemos proxy del HTML con cabeceras de navegador.
+  // Fetesa es WooCommerce con Cloudflare; hacemos proxy con headers completos
+  // y seguimos redirects manualmente (Node no los sigue solo).
   if (pathname.startsWith('/api/fetesa/')) {
-    const targetPath = pathname.replace('/api/fetesa', '');
-    const proxy = https.request(
-      {
-        host: FERRETERIAS_API.fetesa,
-        path: targetPath + (url.search || ''),
+    const targetPath = pathname.replace('/api/fetesa', '') || '/';
+    const fullTarget = targetPath + (url.search || '');
+
+    // Rotar User-Agents para evitar bloqueos
+    const UAS = [
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    ];
+    const ua = UAS[Math.floor(Math.random() * UAS.length)];
+
+    function doFetesaRequest(host, requestPath, redirectCount, clientCookies) {
+      if (redirectCount > 5) {
+        res.writeHead(502);
+        return res.end(JSON.stringify({ error: 'Demasiados redirects' }));
+      }
+
+      const opts = {
+        host,
+        path: requestPath,
         method: 'GET',
+        timeout: 15000,
         headers: {
-          'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'accept-language': 'es-NI,es;q=0.9,en;q=0.8',
-          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'host': 'fetesa.com.ni',
+          'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'accept-language': 'es-NI,es;q=0.9,en-US;q=0.8,en;q=0.7',
+          'accept-encoding': 'gzip, deflate, br',
+          'user-agent': ua,
+          'referer': 'https://fetesa.com.ni/',
+          'origin': 'https://fetesa.com.ni',
+          'connection': 'keep-alive',
           'cache-control': 'no-cache',
           'pragma': 'no-cache',
+          'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-ch-ua-platform': '"Windows"',
           'sec-fetch-dest': 'document',
           'sec-fetch-mode': 'navigate',
-          'sec-fetch-site': 'none',
-          'upgrade-insecure-requests': '1'
+          'sec-fetch-site': redirectCount > 0 ? 'same-origin' : 'none',
+          'sec-fetch-user': '?1',
+          'upgrade-insecure-requests': '1',
+          ...(clientCookies ? { 'cookie': clientCookies } : {})
         }
-      },
-      (up) => {
-        res.writeHead(up.statusCode, {
+      };
+
+      const proxy = https.request(opts, (up) => {
+        // Seguir redirects 301/302/307/308
+        if ([301, 302, 307, 308].includes(up.statusCode) && up.headers['location']) {
+          up.resume(); // consumir body para liberar conexión
+          let loc = up.headers['location'];
+          // Recoger cookies del redirect para la siguiente petición
+          const setCookie = up.headers['set-cookie'];
+          const newCookies = setCookie ? setCookie.map(c => c.split(';')[0]).join('; ') : clientCookies;
+          // Resolver URL relativa vs absoluta
+          if (loc.startsWith('/')) {
+            return doFetesaRequest('fetesa.com.ni', loc, redirectCount + 1, newCookies);
+          } else if (loc.startsWith('http')) {
+            try {
+              const u = new URL(loc);
+              return doFetesaRequest(u.hostname, u.pathname + u.search, redirectCount + 1, newCookies);
+            } catch(_) {}
+          }
+        }
+
+        // Si sigue siendo 403, devolver JSON con mensaje claro
+        if (up.statusCode === 403) {
+          up.resume();
+          res.writeHead(403, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+          return res.end(JSON.stringify({
+            error: 'FETESA_BLOCKED',
+            message: 'fetesa.com.ni bloqueó la petición (WAF/Cloudflare). Intenta de nuevo en unos segundos.'
+          }));
+        }
+
+        // Descomprimir gzip/br si es necesario
+        const zlib = require('zlib');
+        const encoding = up.headers['content-encoding'];
+        const respHeaders = {
           'content-type': up.headers['content-type'] || 'text/html; charset=utf-8',
           'access-control-allow-origin': '*'
-        });
-        up.pipe(res);
-      }
-    );
-    proxy.on('error', (e) => {
-      res.writeHead(502);
-      res.end(JSON.stringify({ error: e.message }));
-    });
-    proxy.end();
+        };
+        res.writeHead(up.statusCode, respHeaders);
+
+        if (encoding === 'gzip') {
+          up.pipe(zlib.createGunzip()).pipe(res);
+        } else if (encoding === 'br') {
+          up.pipe(zlib.createBrotliDecompress()).pipe(res);
+        } else if (encoding === 'deflate') {
+          up.pipe(zlib.createInflate()).pipe(res);
+        } else {
+          up.pipe(res);
+        }
+      });
+
+      proxy.on('timeout', () => {
+        proxy.destroy();
+        if (!res.headersSent) {
+          res.writeHead(504, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Timeout conectando a fetesa.com.ni' }));
+        }
+      });
+
+      proxy.on('error', (e) => {
+        if (!res.headersSent) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+
+      proxy.end();
+    }
+
+    doFetesaRequest('fetesa.com.ni', fullTarget, 0, null);
     return;
   }
 

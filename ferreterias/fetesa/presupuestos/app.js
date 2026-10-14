@@ -179,18 +179,43 @@ async function search(reset = true) {
   try {
     const url = `${API_SEARCH}?s=${encodeURIComponent(query)}&et_search=true&post_type=product&paged=${page}`;
     const r = await fetch(url, { signal: ctrl.signal });
+
+    // Detectar bloqueo WAF/Cloudflare
+    if (r.status === 403) {
+      let msg = 'fetesa.com.ni bloqueó la petición (Cloudflare WAF).';
+      try { const j = await r.json(); if (j.message) msg = j.message; } catch(_) {}
+      $('#results').innerHTML = `<div class="empty" style="line-height:1.8">
+        ⚠️ <strong>Acceso bloqueado por Cloudflare</strong><br>
+        <span style="font-size:11px;color:var(--mu)">${esc(msg)}</span><br><br>
+        <button class="btn btn-primary" onclick="search(true)" style="font-size:12px">🔄 Reintentar</button>
+      </div>`;
+      $('#count').textContent = '';
+      return;
+    }
+
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const html = await r.text();
+
+    // Si la respuesta es un JSON de error (no HTML)
+    if (html.trimStart().startsWith('{')) {
+      const j = JSON.parse(html);
+      throw new Error(j.message || j.error || 'Error del servidor');
+    }
+
     const { items, total } = parseSearchHTML(html);
     products = products.concat(items);
     totalEstimate = total;
     render();
   } catch (e) {
     if (e.name === 'AbortError') return;
-    $('#results').innerHTML = `<div class="empty">Error: ${esc(e.message)}. Verifica que server.js está corriendo.</div>`;
+    $('#results').innerHTML = `<div class="empty">
+      ❌ <strong>Error:</strong> ${esc(e.message)}<br>
+      <span style="font-size:11px;color:var(--mu)">Verifica que server.js está corriendo en el servidor.</span>
+    </div>`;
     $('#count').textContent = '';
   }
 }
+
 
 // ── RENDER ─────────────────────────────────────────────────────────────────
 function render() {
