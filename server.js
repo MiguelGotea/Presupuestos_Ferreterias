@@ -54,10 +54,10 @@ http.createServer((req, res) => {
     return res.end();
   }
 
-  // ── Proxy Fetesa (/api/fetesa/*) ──────────────────────────────────────────
-  // fetesa-cf.js mantiene una sesión Chrome persistente y usa page.evaluate()
-  // para hacer fetch() dentro del contexto del browser — mismo TLS, mismas cookies CF.
-  if (pathname.startsWith('/api/fetesa/')) {
+  // ── Fetesa: búsqueda HTML scraping (/api/fetesa/search) ───────────────────
+  // /wp-json/ está bloqueado por Firewall Rules de CF.
+  // Chrome navega a las páginas WooCommerce y extrae datos del DOM.
+  if (pathname === '/api/fetesa/search' || pathname === '/api/fetesa/product') {
     const fetesaCf = (() => { try { return require('./fetesa-cf'); } catch(_) { return null; } })();
 
     if (!fetesaCf) {
@@ -65,29 +65,30 @@ http.createServer((req, res) => {
       return res.end(JSON.stringify({ error: 'FETESA_CF', message: 'fetesa-cf.js no disponible' }));
     }
 
-    const targetPath = pathname.replace('/api/fetesa', '') || '/';
-    const targetUrl  = 'https://fetesa.com.ni' + targetPath + (url.search || '');
+    const json = (code, obj) => {
+      if (res.headersSent) return;
+      res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*' });
+      res.end(JSON.stringify(obj));
+    };
 
-    fetesaCf.fetesaFetch(targetUrl).then(result => {
-      if (result.error) {
-        res.writeHead(502, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-        return res.end(JSON.stringify({ error: 'FETESA_FETCH', message: result.error }));
-      }
-      const outHeaders = {
-        'content-type': 'application/json; charset=utf-8',
-        'access-control-allow-origin': '*',
-        'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages',
-      };
-      if (result.xTotal)      outHeaders['x-wp-total']      = result.xTotal;
-      if (result.xTotalPages) outHeaders['x-wp-totalpages'] = result.xTotalPages;
-      res.writeHead(result.ok ? 200 : result.status, outHeaders);
-      res.end(result.text, 'utf8');
-    }).catch(e => {
-      if (!res.headersSent) {
-        res.writeHead(503, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-        res.end(JSON.stringify({ error: 'FETESA_CF', message: e.message }));
-      }
-    });
+    if (pathname === '/api/fetesa/search') {
+      const q    = url.searchParams.get('q') || '';
+      const page = parseInt(url.searchParams.get('page') || '1');
+      if (!q) return json(400, { error: 'Falta parámetro q' });
+
+      fetesaCf.fetesaSearch(q, page)
+        .then(result => json(200, result))
+        .catch(e    => json(503, { error: 'FETESA_SEARCH', message: e.message }));
+
+    } else {
+      // /api/fetesa/product?url=...
+      const productUrl = url.searchParams.get('url') || '';
+      if (!productUrl) return json(400, { error: 'Falta parámetro url' });
+
+      fetesaCf.fetesaProduct(productUrl)
+        .then(result => json(200, result))
+        .catch(e    => json(503, { error: 'FETESA_PRODUCT', message: e.message }));
+    }
 
     return;
   }

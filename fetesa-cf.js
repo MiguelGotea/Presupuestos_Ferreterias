@@ -1,19 +1,18 @@
 'use strict';
-// fetesa-cf.js — Sesión persistente de Chrome para fetesa.com.ni
+// fetesa-cf.js — Sesión Chrome persistente para fetesa.com.ni
 //
-// El cf_clearance está vinculado a la firma TLS del browser (JA3).
-// Si curl (JA3 diferente) intenta usarlo, CF lo rechaza.
-// Solución: usar el mismo Chrome para hacer los fetches via page.evaluate().
+// Cloudflare bloquea /wp-json/ API con Firewall Rules separadas.
+// Solución: navegar a las páginas HTML de WooCommerce y extraer
+// los datos del DOM (mismo método que usa un usuario real).
 //
-// Arquitectura:
-//   1. Lanzar Chrome y cargar fetesa.com.ni (resuelve CF JS challenge)
-//   2. Reusar esa pestaña para fetch() internos (mismo origen, sin CORS)
-//   3. Cerrar Chrome después de N minutos de inactividad (liberar RAM)
+// Expone:
+//   fetesaSearch(query, pageNum) → { items, total }
+//   fetesaProduct(url)           → { ...productDetail }
 
 const fs   = require('fs');
 const path = require('path');
 
-// ── Rutas Chrome (mismo orden que wsp-clientes) ─────────────────────────────
+// ── Chrome ──────────────────────────────────────────────────────────────────
 const CHROME_PATHS = [
   '/usr/bin/google-chrome-stable',
   '/usr/bin/google-chrome',
@@ -24,8 +23,6 @@ const CHROME_PATHS = [
 function findChrome() {
   return CHROME_PATHS.find(p => fs.existsSync(p)) || null;
 }
-
-// ── Args Chrome probados en el VPS (de wsp-clientes) ───────────────────────
 const CHROME_ARGS = [
   '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
   '--disable-gpu', '--disable-background-timer-throttling',
@@ -38,40 +35,36 @@ const CHROME_ARGS = [
   '--disable-features=IsolateOrigins,site-per-process,AudioServiceOutOfProcess',
 ];
 
-// ── Obtener puppeteer ───────────────────────────────────────────────────────
 function getPuppeteer() {
   try { return require('puppeteer'); } catch(_) {}
   try { return require('puppeteer-core'); } catch(_) {}
-  const wspPath = path.resolve(__dirname, '../PitayaBot/wsp-clientes/node_modules/puppeteer');
-  try { return require(wspPath); } catch(_) {}
+  const p = path.resolve(__dirname, '../PitayaBot/wsp-clientes/node_modules/puppeteer');
+  try { return require(p); } catch(_) {}
   throw new Error('puppeteer no encontrado. Ejecuta: npm install puppeteer');
 }
 
 // ── Sesión persistente ──────────────────────────────────────────────────────
-const IDLE_CLOSE_MS  = 8 * 60 * 1000;  // cerrar Chrome tras 8 min sin uso
-const SESSION_TTL_MS = 45 * 60 * 1000; // refrescar sesión cada 45 min
+const IDLE_CLOSE_MS  = 8  * 60 * 1000;  // cerrar Chrome tras 8 min sin uso
+const SESSION_TTL_MS = 40 * 60 * 1000;  // refrescar sesión CF cada 40 min
 
-let _browser     = null;
-let _page        = null;
-let _sessionAt   = 0;    // cuándo se obtuvo cf_clearance
-let _lastUseAt   = 0;    // último uso
-let _idleTimer   = null;
-let _starting    = false;
-let _startQueue  = [];
+let _browser   = null;
+let _page      = null;
+let _sessionAt = 0;
+let _idleTimer = null;
+let _starting  = false;
+let _queue     = [];
 
-// Cerrar Chrome por inactividad
 function scheduleIdleClose() {
   if (_idleTimer) clearTimeout(_idleTimer);
   _idleTimer = setTimeout(async () => {
-    console.log('[fetesa-cf] 💤 Inactividad — cerrando Chrome para liberar RAM');
+    console.log('[fetesa-cf] 💤 Inactividad — cerrando Chrome (liberar RAM)');
     await closeSession();
   }, IDLE_CLOSE_MS);
 }
 
 async function closeSession() {
   if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
-  _page    = null;
-  _sessionAt = 0;
+  _page = null; _sessionAt = 0;
   if (_browser) {
     try { await _browser.close(); } catch(_) {}
     _browser = null;
@@ -79,142 +72,180 @@ async function closeSession() {
   }
 }
 
-// Lanzar Chrome y resolver CF challenge
 async function startSession() {
   const puppeteer = getPuppeteer();
-  const executablePath = findChrome();
-  if (!executablePath) {
-    throw new Error('Chrome/Chromium no encontrado. Rutas: ' + CHROME_PATHS.join(', '));
-  }
+  const exe = findChrome();
+  if (!exe) throw new Error('Chrome no encontrado: ' + CHROME_PATHS.join(', '));
 
-  console.log(`[fetesa-cf] 🌐 Lanzando Chrome (${executablePath})...`);
-  await closeSession(); // limpiar si había algo
+  console.log(`[fetesa-cf] 🌐 Lanzando Chrome (${exe})...`);
+  await closeSession();
 
-  _browser = await puppeteer.launch({
-    headless: 'new',
-    executablePath,
-    args: CHROME_ARGS,
-    timeout: 30000,
-  });
-
-  _page = await _browser.newPage();
+  _browser = await puppeteer.launch({ headless: 'new', executablePath: exe, args: CHROME_ARGS, timeout: 30000 });
+  _page    = await _browser.newPage();
   await _page.setUserAgent(
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
   );
 
-  // Cargar homepage para resolver el JS challenge
-  console.log('[fetesa-cf] 🔄 Cargando fetesa.com.ni...');
+  // Resolver CF challenge cargando la homepage
+  console.log('[fetesa-cf] 🔄 Cargando fetesa.com.ni para resolver CF challenge...');
   try {
-    await _page.goto('https://fetesa.com.ni/', {
-      waitUntil: 'domcontentloaded',
-      timeout: 45000,
-    });
+    await _page.goto('https://fetesa.com.ni/', { waitUntil: 'domcontentloaded', timeout: 45000 });
   } catch(e) {
     console.log(`[fetesa-cf] ⚠️ goto warn: ${e.message} — continuando...`);
   }
 
   // Esperar cf_clearance (hasta 20s)
-  console.log('[fetesa-cf] ⏳ Esperando CF challenge...');
   for (let i = 0; i < 20; i++) {
     await new Promise(r => setTimeout(r, 1000));
     const cookies = await _page.cookies('https://fetesa.com.ni').catch(() => []);
-    const ok = cookies.some(c => c.name === 'cf_clearance');
-    if (ok) {
-      console.log(`[fetesa-cf] ✅ cf_clearance obtenido (${i + 1}s)`);
+    if (cookies.some(c => c.name === 'cf_clearance')) {
+      console.log(`[fetesa-cf] ✅ cf_clearance obtenido (${i + 1}s). Sesión lista.`);
       break;
     }
-    if (i % 5 === 4) console.log(`[fetesa-cf] ... esperando (${i + 1}s)`);
+    if (i % 5 === 4) console.log(`[fetesa-cf] ... esperando CF (${i + 1}s)`);
   }
 
   _sessionAt = Date.now();
-  _lastUseAt = Date.now();
   scheduleIdleClose();
-  console.log('[fetesa-cf] ✅ Sesión lista');
 }
 
-// Asegurar que la sesión esté activa y fresca
 async function ensureSession() {
-  const sessionExpired = !_sessionAt || (Date.now() - _sessionAt) > SESSION_TTL_MS;
-  const pageAlive = _page && !_page.isClosed();
+  const alive   = _page && !_page.isClosed();
+  const fresh   = _sessionAt && (Date.now() - _sessionAt) < SESSION_TTL_MS;
+  if (alive && fresh) return;
 
-  if (pageAlive && !sessionExpired) return; // sesión OK
-
-  // Si ya hay un inicio en curso, encolar
   if (_starting) {
-    return new Promise((resolve, reject) => _startQueue.push({ resolve, reject }));
+    return new Promise((resolve, reject) => _queue.push({ resolve, reject }));
   }
-
   _starting = true;
   try {
     await startSession();
-    _startQueue.forEach(p => p.resolve());
+    _queue.forEach(p => p.resolve());
   } catch(e) {
-    _startQueue.forEach(p => p.reject(e));
+    _queue.forEach(p => p.reject(e));
     throw e;
   } finally {
     _starting = false;
-    _startQueue = [];
+    _queue = [];
   }
 }
 
-// ── Fetch API usando Chrome interno (mismo origen = sin CORS) ───────────────
-async function fetesaFetch(apiUrl) {
-  await ensureSession();
-  _lastUseAt = Date.now();
-  scheduleIdleClose(); // resetear timer de inactividad
-
-  // page.evaluate hace fetch() desde el contexto de Chrome (fetesa.com.ni)
-  // → mismo origen, misma firma TLS, cookies CF incluidas automáticamente
-  const result = await _page.evaluate(async (url) => {
-    try {
-      const r = await fetch(url, {
-        headers: {
-          'Accept': 'application/json, */*;q=0.8',
-          'Accept-Language': 'es-NI,es;q=0.9',
-        },
-        credentials: 'include', // incluir cookies CF
-      });
-      const xTotal      = r.headers.get('x-wp-total')      || '';
-      const xTotalPages = r.headers.get('x-wp-totalpages') || '';
-      const text        = await r.text();
-      return { ok: r.ok, status: r.status, text, xTotal, xTotalPages, error: null };
-    } catch(e) {
-      return { ok: false, status: 0, text: '', xTotal: '', xTotalPages: '', error: e.message };
+// ── Navegar con reintentos ──────────────────────────────────────────────────
+async function navigateTo(url) {
+  scheduleIdleClose();
+  try {
+    await _page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Si Cloudflare redirige a un challenge, esperar que se resuelva
+    for (let i = 0; i < 8; i++) {
+      const pageUrl = _page.url();
+      const title   = await _page.title().catch(() => '');
+      if (!title.includes('Just a moment') && !pageUrl.includes('challenge')) break;
+      console.log(`[fetesa-cf] 🔄 CF challenge en ${url} (${i + 1}s)...`);
+      await new Promise(r => setTimeout(r, 1000));
     }
-  }, apiUrl);
-
-  // Si CF bloqueó (respuesta HTML), refrescar sesión y reintentar una vez
-  if (result.text && result.text.trimStart().startsWith('<') && !result.error) {
-    console.log('[fetesa-cf] ⚠️ Respuesta HTML — refrescando sesión CF...');
-    _sessionAt = 0; // forzar re-init
-    await ensureSession();
-    return _page.evaluate(async (url) => {
-      try {
-        const r = await fetch(url, {
-          headers: { 'Accept': 'application/json, */*;q=0.8' },
-          credentials: 'include',
-        });
-        const xTotal      = r.headers.get('x-wp-total')      || '';
-        const xTotalPages = r.headers.get('x-wp-totalpages') || '';
-        const text        = await r.text();
-        return { ok: r.ok, status: r.status, text, xTotal, xTotalPages, error: null };
-      } catch(e) {
-        return { ok: false, status: 0, text: '', xTotal: '', xTotalPages: '', error: e.message };
-      }
-    }, apiUrl);
+  } catch(e) {
+    if (!e.message.includes('timeout')) throw e;
+    console.log(`[fetesa-cf] ⚠️ Timeout navegando a ${url} — usando DOM disponible`);
   }
+}
+
+// ── Extractor de productos de página de búsqueda WooCommerce/Divi ───────────
+async function fetesaSearch(query, pageNum = 1) {
+  await ensureSession();
+  const url = `https://fetesa.com.ni/?s=${encodeURIComponent(query)}&et_search=true&post_type=product&paged=${pageNum}`;
+  await navigateTo(url);
+
+  const result = await _page.evaluate(() => {
+    // Selectores de WooCommerce + tema Divi/Extra
+    const cards = Array.from(document.querySelectorAll(
+      'li.product, .et_pb_product, .product-container, .wc-block-product'
+    ));
+
+    const items = cards.map(el => {
+      // Link y slug
+      const linkEl = el.querySelector('a.woocommerce-LoopProduct-link, .woocommerce-loop-product__link, a[href*="/producto/"], .et_pb_module_inner a');
+      const link   = linkEl?.href || '';
+      const slug   = link.replace(/.*\/producto\//, '').replace(/\/+$/, '');
+
+      // Nombre
+      const name = (
+        el.querySelector('.woocommerce-loop-product__title, .et_pb_title_container h2, h2.woocommerce-loop-product__title, h3, h2')
+          ?.textContent?.trim()
+      ) || '';
+
+      // Imagen
+      const img = el.querySelector('img')?.src || '';
+
+      // Precios — puede haber precio tachado (lista) y precio actual
+      const priceEl = el.querySelector('.price');
+      const bdiList = Array.from(priceEl?.querySelectorAll('bdi, .woocommerce-Price-amount') || []);
+      const prices  = bdiList
+        .map(b => parseFloat(b.textContent.replace(/[^\d.]/g, '')) || 0)
+        .filter(n => n > 0);
+      prices.sort((a, b) => a - b);
+      const price     = prices[0] || 0;
+      const listPrice = prices.length > 1 ? prices[prices.length - 1] : 0;
+
+      // Disponibilidad
+      const available = !el.querySelector('.out-of-stock, .outofstock');
+
+      if (!name || !link) return null;
+      return { id: slug, name, slug, link, image: img, price, listPrice, available, cats: [], cat: '', sku: '', attrs: {}, _loaded: true };
+    }).filter(Boolean);
+
+    // Total de resultados
+    const countEl = document.querySelector('.woocommerce-result-count');
+    const match   = countEl?.textContent?.match(/(\d+)/g);
+    const total   = match ? parseInt(match[match.length - 1]) : items.length;
+
+    // ¿Hay página siguiente?
+    const hasNext = !!document.querySelector('.next.page-numbers, .woocommerce-pagination .next');
+
+    return { items, total, hasNext };
+  });
 
   return result;
 }
 
-// Calentar sesión en background (llamar al inicio del servidor)
-async function warmUp() {
-  try {
-    await ensureSession();
-    console.log('[fetesa-cf] 🔥 Sesión precalentada');
-  } catch(e) {
-    console.log(`[fetesa-cf] ⚠️ Warmup falló: ${e.message}`);
-  }
+// ── Extractor de detalle de producto ───────────────────────────────────────
+async function fetesaProduct(url) {
+  await ensureSession();
+  await navigateTo(url);
+
+  return _page.evaluate(() => {
+    const name = document.querySelector('.product_title, h1.product_title')?.textContent?.trim() || '';
+    const sku  = document.querySelector('.sku')?.textContent?.trim() || '';
+
+    const priceEl  = document.querySelector('.summary .price');
+    const bdiList  = Array.from(priceEl?.querySelectorAll('bdi, .woocommerce-Price-amount') || []);
+    const prices   = bdiList.map(b => parseFloat(b.textContent.replace(/[^\d.]/g, '')) || 0).filter(n => n > 0).sort((a, b) => a - b);
+    const price    = prices[0] || 0;
+    const listPrice = prices.length > 1 ? prices[prices.length - 1] : 0;
+
+    const images = Array.from(document.querySelectorAll('.woocommerce-product-gallery img, .et_pb_wc_images img'))
+      .map(i => i.src || i.dataset.src || '').filter(Boolean);
+
+    const cats = Array.from(document.querySelectorAll('.posted_in a')).map(a => a.textContent.trim());
+
+    const attrs = {};
+    document.querySelectorAll('.woocommerce-product-attributes tr, .shop_attributes tr').forEach(row => {
+      const k = row.querySelector('th')?.textContent?.trim();
+      const v = row.querySelector('td')?.textContent?.trim();
+      if (k && v) attrs[k] = v;
+    });
+
+    const desc = document.querySelector('.woocommerce-product-details__short-description, .et_pb_wc_description')
+      ?.innerText?.trim() || '';
+
+    const available = !document.querySelector('.out-of-stock');
+
+    return { name, sku, price, listPrice, images, cats, cat: cats[cats.length - 1] || '', attrs, desc, available, _detailLoaded: true };
+  });
 }
 
-module.exports = { fetesaFetch, warmUp, closeSession };
+async function warmUp() {
+  try { await ensureSession(); console.log('[fetesa-cf] 🔥 Sesión precalentada'); }
+  catch(e) { console.log(`[fetesa-cf] ⚠️ Warmup: ${e.message}`); }
+}
+
+module.exports = { fetesaSearch, fetesaProduct, warmUp, closeSession };

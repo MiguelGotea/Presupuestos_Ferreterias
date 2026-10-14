@@ -1,8 +1,8 @@
 // ── CONFIGURACIÓN ──────────────────────────────────────────────────────────
-// El servidor (server.js) usa puppeteer-core + chromium para resolver el
-// Cloudflare JS Challenge de fetesa.com.ni y cachea cf_clearance ~50 min.
-// El cliente solo habla con el proxy local en /api/fetesa/.
-const API_PRODUCTS = '/api/fetesa/wp-json/wc/store/v1/products';
+// El servidor navega fetesa.com.ni con Chrome real (bypasa CF) y extrae
+// los productos del DOM HTML (evita /wp-json/ bloqueado por Firewall Rules).
+const API_SEARCH  = '/api/fetesa/search';   // ?q=QUERY&page=N
+const API_PRODUCT = '/api/fetesa/product';  // ?url=PRODUCT_URL
 const PER_PAGE = 12;
 
 const $  = s => document.querySelector(s);
@@ -21,39 +21,25 @@ let selectedCats = null;
 const pool = new Map();
 let budget = JSON.parse(localStorage.getItem('fetesa-budget') || '[]');
 
-// ── NORMALIZAR PRODUCTO (WooCommerce Store API v1) ─────────────────────────
+// ── NORMALIZAR PRODUCTO (scraping HTML vía Chrome) ─────────────────────────
+// El servidor ya devuelve objetos normalizados; solo aseguramos tipos y pool.
 function norm(p) {
-  const prices  = p.prices || {};
-  const price   = parseMoney(prices.price);
-  const regular = parseMoney(prices.regular_price);
-  const listPrice = regular > price ? regular : 0;
-
-  const images = (p.images || []).map(i => i.src || i.thumbnail || '').filter(Boolean);
-
-  const cats = (p.categories || []).map(c => c.name).filter(Boolean);
-  const cat  = cats[cats.length - 1] || '';
-
-  const attrs = {};
-  (p.attributes || []).forEach(a => {
-    if (a.name && a.terms?.length) attrs[a.name] = a.terms.map(t => t.name).join(', ');
-  });
-
   const raw = {
-    id:        String(p.id),
-    name:      p.name || '',
-    slug:      p.slug || '',
-    link:      p.permalink || '',
-    sku:       p.sku || '',
-    brand:     '',
-    price,
-    listPrice,
-    available: p.is_in_stock !== false,
-    image:     images[0] || '',
-    images,
-    cats,
-    cat,
-    desc:      stripHtml(p.short_description || p.description || ''),
-    attrs,
+    id:        String(p.id || p.slug || p.name),
+    name:      p.name      || '',
+    slug:      p.slug      || '',
+    link:      p.link      || '',
+    sku:       p.sku       || '',
+    brand:     p.brand     || '',
+    price:     Number(p.price)     || 0,
+    listPrice: Number(p.listPrice) || 0,
+    available: p.available !== false,
+    image:     p.image     || (p.images?.[0]) || '',
+    images:    p.images    || (p.image ? [p.image] : []),
+    cats:      p.cats      || (p.cat ? [p.cat] : []),
+    cat:       p.cat       || '',
+    desc:      p.desc      || '',
+    attrs:     p.attrs     || {},
     _loaded:   true,
   };
   pool.set(raw.id, raw);
@@ -66,23 +52,17 @@ async function search(reset = true) {
   if (reset) { page = 1; products = []; selectedCats = null; }
   if (query.length < 2) { render(); return; }
   ctrl?.abort(); ctrl = new AbortController();
-  $('#count').textContent = 'Buscando…';
+  $('#count').textContent = 'Buscando… (Chrome abriendo Fetesa, puede tomar ~20s la primera vez)';
   try {
-    const url = `${API_PRODUCTS}?search=${encodeURIComponent(query)}&per_page=${PER_PAGE}&page=${page}&_fields=id,name,slug,permalink,sku,prices,images,categories,attributes,is_in_stock,short_description`;
+    const url = `${API_SEARCH}?q=${encodeURIComponent(query)}&page=${page}`;
     const r = await fetch(url, { signal: ctrl.signal });
 
-    // 503 = puppeteer no instalado en el servidor
     if (r.status === 503) {
       const j = await r.json().catch(() => ({}));
-      const msg = j.message || 'puppeteer-core no instalado';
       $('#results').innerHTML = `<div class="empty" style="line-height:2">
-        🔧 <strong>Configuración requerida en el servidor</strong><br>
-        <span style="font-size:11px;color:var(--mu)">${esc(msg)}</span><br><br>
-        <code style="font-size:11px;background:#1a1a2e;color:#7ec8e3;padding:6px 10px;border-radius:6px;display:block;text-align:left">
-          npm install puppeteer-core<br>
-          apt-get install -y chromium-browser<br>
-          pm2 restart presupuestos-ferr…
-        </code>
+        🔧 <strong>Error del servidor</strong><br>
+        <span style="font-size:11px;color:var(--mu)">${esc(j.message || 'Error desconocido')}</span><br><br>
+        <button class="btn btn-primary" onclick="search(true)" style="font-size:12px">🔄 Reintentar</button>
       </div>`;
       $('#count').textContent = '';
       return;
@@ -90,15 +70,11 @@ async function search(reset = true) {
 
     if (!r.ok) throw new Error('HTTP ' + r.status);
 
-    const total = parseInt(r.headers.get('x-wp-total') || '0');
-    const data  = await r.json();
+    const data = await r.json();
+    if (!data?.items) throw new Error(data?.error || 'Respuesta inesperada del servidor');
 
-    if (!Array.isArray(data)) {
-      throw new Error(data?.message || data?.code || 'Respuesta inesperada del servidor');
-    }
-
-    products = products.concat(data.map(norm));
-    totalEstimate = total || products.length;
+    products = products.concat(data.items.map(norm));
+    totalEstimate = data.total || products.length;
     render();
 
   } catch (e) {
@@ -185,16 +161,18 @@ async function openModal(id) {
   renderModal(p);
   $('#modal').classList.add('on');
 
-  // Cargar detalle completo si no se ha cargado (atributos extras)
-  if (!p._detailLoaded) {
+  // Cargar detalle completo via Chrome si no se cargó aún
+  if (!p._detailLoaded && p.link) {
     try {
-      const r = await fetch(`${API_PRODUCTS}/${id}`);
+      const r = await fetch(`${API_PRODUCT}?url=${encodeURIComponent(p.link)}`);
       if (r.ok) {
-        const data = await r.json();
-        const updated = norm(data);
-        updated._detailLoaded = true;
-        pool.set(id, updated);
-        renderModal(updated);
+        const detail = await r.json();
+        if (detail.name) {
+          const updated = norm({ ...p, ...detail, id: p.id });
+          updated._detailLoaded = true;
+          pool.set(p.id, updated);
+          renderModal(updated);
+        }
       }
     } catch (_) { /* usar datos básicos */ }
   }
