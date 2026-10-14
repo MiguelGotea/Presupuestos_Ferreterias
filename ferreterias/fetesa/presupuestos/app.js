@@ -1,9 +1,9 @@
 // ── CONFIGURACIÓN ──────────────────────────────────────────────────────────
-// Proxy en server.js: /api/fetesa/* → https://fetesa.com.ni/*
-// API pública WooCommerce Store API (sin autenticación):
-//   /wp-json/wc/store/v1/products?search=QUERY&per_page=12&page=N
-//   /wp-json/wc/store/v1/products/{id}
-const API_PRODUCTS = '/api/fetesa/wp-json/wc/store/v1/products';
+// ⚡ Fetch directo desde el browser → fetesa.com.ni (sin proxy del VPS).
+// WooCommerce Store API v1 tiene CORS habilitado por defecto.
+// El VPS nunca interviene en estas peticiones — solo el navegador del usuario.
+const FETESA_BASE    = 'https://fetesa.com.ni';
+const API_PRODUCTS   = FETESA_BASE + '/wp-json/wc/store/v1/products';
 const PER_PAGE = 12;
 
 const $  = s => document.querySelector(s);
@@ -73,12 +73,16 @@ async function search(reset = true) {
 
     // Detectar bloqueo WAF/Cloudflare
     if (r.status === 403) {
-      let msg = 'fetesa.com.ni bloqueó la petición (Cloudflare WAF).';
+      let msg = 'fetesa.com.ni bloqueó la petición.';
       try { const j = await r.json(); if (j.message) msg = j.message; } catch(_) {}
       $('#results').innerHTML = `<div class="empty" style="line-height:1.9">
-        ⚠️ <strong>Acceso bloqueado por Cloudflare</strong><br>
+        ⚠️ <strong>Acceso bloqueado</strong><br>
         <span style="font-size:11px;color:var(--mu)">${esc(msg)}</span><br><br>
-        <button class="btn btn-primary" onclick="search(true)" style="font-size:12px">🔄 Reintentar</button>
+        <a href="https://fetesa.com.ni" target="_blank" rel="noopener" class="btn btn-sec" style="font-size:12px;display:inline-block;margin-bottom:8px">
+          🌐 Abrir Fetesa primero
+        </a>&nbsp;
+        <button class="btn btn-primary" onclick="search(true)" style="font-size:12px">🔄 Reintentar</button><br>
+        <span style="font-size:10px;color:var(--mu)">Abre Fetesa en otra pestaña para obtener cookies de Cloudflare, luego reintenta.</span>
       </div>`;
       $('#count').textContent = '';
       return;
