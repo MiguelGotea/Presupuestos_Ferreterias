@@ -28,7 +28,8 @@ const MIME_TYPES = {
 const STATIC_ROUTES = {
   '/':                                           'index.html',
   '/index.html':                                 'index.html',
-  '/favicon.ico':                                'favicon-sinsa.svg',
+  '/favicon.ico':                                'favicon.svg',
+  '/favicon.svg':                                'favicon.svg',
   '/favicon-sinsa.svg':                          'favicon-sinsa.svg',
   '/ferreterias/sinsa/sinsa-presupuestos.html':  'ferreterias/sinsa/sinsa-presupuestos.html',
   '/ferreterias/sinsa/sinsa-descuentos.html':    'ferreterias/sinsa/sinsa-descuentos.html',
