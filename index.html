@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Presupuestos Ferreterías</title>
+  <meta name="description" content="Catálogo de herramientas de presupuesto para ferreterías. Consulta precios y descuentos en tiempo real.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --surface2: #22263a;
+      --border:   rgba(255,255,255,.08);
+      --accent:   #4f8ef7;
+      --accent2:  #6c63ff;
+      --tx:       #e8eaf0;
+      --mu:       #8b91a8;
+      --radius:   18px;
+      --shadow:   0 8px 40px rgba(0,0,0,.45);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--tx);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── HERO ───────────────────────────── */
+    .hero {
+      width: 100%;
+      padding: 72px 24px 48px;
+      text-align: center;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(79,142,247,.18) 0%, transparent 70%);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(79,142,247,.12);
+      border: 1px solid rgba(79,142,247,.3);
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-bottom: 22px;
+    }
+    .hero-badge::before { content: '⬡'; font-size: 13px; }
+
+    .hero h1 {
+      font-size: clamp(32px, 6vw, 56px);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -.02em;
+      background: linear-gradient(135deg, #e8eaf0 30%, #4f8ef7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    .hero p {
+      font-size: 16px;
+      color: var(--mu);
+      max-width: 480px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── GRID DE FERRETERIAS ─────────────── */
+    .section {
+      width: 100%;
+      max-width: 960px;
+      padding: 48px 24px 80px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--mu);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    /* ── CARD ───────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .2s, transform .2s, box-shadow .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--card-c1, #4f8ef7), var(--card-c2, #6c63ff));
+      opacity: 0;
+      transition: opacity .25s;
+      border-radius: inherit;
+    }
+    .card:hover {
+      border-color: rgba(79,142,247,.4);
+      transform: translateY(-3px);
+      box-shadow: 0 16px 48px rgba(0,0,0,.4), 0 0 0 1px rgba(79,142,247,.2);
+    }
+    .card:hover::before { opacity: .06; }
+    .card > * { position: relative; z-index: 1; }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--border);
+    }
+
+    .card-body h2 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    .card-body p {
+      font-size: 13px;
+      color: var(--mu);
+      line-height: 1.5;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: auto;
+    }
+
+    .card-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(79,142,247,.12);
+      color: var(--accent);
+      border: 1px solid rgba(79,142,247,.2);
+      letter-spacing: .03em;
+    }
+    .tag.green {
+      background: rgba(52,199,89,.12);
+      color: #34c759;
+      border-color: rgba(52,199,89,.2);
+    }
+
+    .card-arrow {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: background .2s, transform .2s;
+      flex-shrink: 0;
+    }
+    .card:hover .card-arrow {
+      background: var(--accent);
+      border-color: var(--accent);
+      transform: translateX(2px);
+    }
+
+    /* ── COMING SOON ────────────────────── */
+    .card.soon {
+      opacity: .45;
+      pointer-events: none;
+    }
+    .card.soon .card-arrow { opacity: 0; }
+
+    /* ── FOOTER ─────────────────────────── */
+    footer {
+      width: 100%;
+      border-top: 1px solid var(--border);
+      padding: 20px 24px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--mu);
+    }
+
+    @media (max-width: 480px) {
+      .hero { padding: 48px 20px 36px; }
+      .section { padding: 32px 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">Herramientas Internas</div>
+    <h1>Presupuestos<br>Ferreterías</h1>
+    <p>Consulta precios, genera presupuestos y revisa descuentos directamente desde el catálogo de cada ferretería.</p>
+  </section>
+
+  <!-- GRID -->
+  <section class="section">
+    <div class="section-title">Ferreterías disponibles</div>
+    <div class="grid">
+
+      <!-- SINSA -->
+      <a class="card" href="/ferreterias/sinsa/sinsa-presupuestos.html" id="card-sinsa" style="--card-c1:#1b6e2e;--card-c2:#28a745;">
+        <div class="card-icon">🏗️</div>
+        <div class="card-body">
+          <h2>Sinsa</h2>
+          <p>Busca materiales, consulta precios actualizados y visualiza los descuentos por volumen disponibles.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag green">Activa</span>
+            <span class="tag">Presupuestos</span>
+            <span class="tag">Descuentos</span>
+          </div>
+          <div class="card-arrow">→</div>
+        </div>
+      </a>
+
+      <!-- PRÓXIMAMENTE 1 -->
+      <div class="card soon">
+        <div class="card-icon">🔩</div>
+        <div class="card-body">
+          <h2>Próximamente</h2>
+          <p>Se integrará otra ferretería al catálogo. Mantente al tanto de las actualizaciones.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags"><span class="tag">En desarrollo</span></div>
+          <div class="card-arrow">→</div>
+        </div>
+      </div>
+
+      <!-- PRÓXIMAMENTE 2 -->
+      <div class="card soon">
+        <div class="card-icon">🪵</div>
+        <div class="card-body">
+          <h2>Próximamente</h2>
+          <p>Más proveedores de materiales se agregarán conforme se expanda el catálogo.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags"><span class="tag">En desarrollo</span></div>
+          <div class="card-arrow">→</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    Presupuestos Ferreterías · Herramienta interna de uso operativo
+  </footer>
+
+</body>
+</html>
