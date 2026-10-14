@@ -28,7 +28,7 @@ http.createServer((req, res) => {
 
   // ── Proxy API Sinsa (/api/sinsa/*) ────────────────────────────────────────
   if (pathname.startsWith('/api/sinsa/')) {
-    const apiPath = pathname.replace('/api/sinsa', '');
+    const apiPath = pathname.replace('/api/sinsa', '/api');
     const proxy = https.request(
       {
         host: FERRETERIAS_API.sinsa,
