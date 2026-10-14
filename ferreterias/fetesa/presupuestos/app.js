@@ -1,9 +1,8 @@
 // ── CONFIGURACIÓN ──────────────────────────────────────────────────────────
-// ⚡ Fetch directo desde el browser → fetesa.com.ni (sin proxy del VPS).
-// WooCommerce Store API v1 tiene CORS habilitado por defecto.
-// El VPS nunca interviene en estas peticiones — solo el navegador del usuario.
-const FETESA_BASE    = 'https://fetesa.com.ni';
-const API_PRODUCTS   = FETESA_BASE + '/wp-json/wc/store/v1/products';
+// Proxy en server.js (/api/fetesa/) usa curl como subprocess para pasar
+// el WAF de Cloudflare (curl tiene firma TLS distinta a Node.js).
+// API pública WooCommerce Store API (sin autenticación).
+const API_PRODUCTS = '/api/fetesa/wp-json/wc/store/v1/products';
 const PER_PAGE = 12;
 
 const $  = s => document.querySelector(s);

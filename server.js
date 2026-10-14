@@ -54,14 +54,15 @@ http.createServer((req, res) => {
     return res.end();
   }
 
-  // ── Proxy HTML Fetesa (/api/fetesa/*) ──────────────────────────────────────
-  // Fetesa es WooCommerce con Cloudflare; hacemos proxy con headers completos
-  // y seguimos redirects manualmente (Node no los sigue solo).
+  // ── Proxy Fetesa via curl (/api/fetesa/*) ─────────────────────────────────
+  // Node.js https tiene firma TLS (JA3) que Cloudflare detecta como bot → 403.
+  // curl tiene firma TLS diferente y suele pasar el WAF sin problemas.
+  // Usamos --include para capturar headers de respuesta (X-WP-Total, etc.).
   if (pathname.startsWith('/api/fetesa/')) {
+    const { spawn } = require('child_process');
     const targetPath = pathname.replace('/api/fetesa', '') || '/';
-    const fullTarget = targetPath + (url.search || '');
+    const targetUrl  = 'https://fetesa.com.ni' + targetPath + (url.search || '');
 
-    // Rotar User-Agents para evitar bloqueos
     const UAS = [
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
@@ -70,111 +71,87 @@ http.createServer((req, res) => {
     ];
     const ua = UAS[Math.floor(Math.random() * UAS.length)];
 
-    function doFetesaRequest(host, requestPath, redirectCount, clientCookies) {
-      if (redirectCount > 5) {
-        res.writeHead(502);
-        return res.end(JSON.stringify({ error: 'Demasiados redirects' }));
+    const curlArgs = [
+      '--silent',
+      '--location',           // seguir redirects
+      '--max-redirs', '5',
+      '--compressed',         // descomprimir gzip/br automáticamente
+      '--max-time', '15',
+      '--include',            // incluir headers de respuesta en stdout
+      '--header', `User-Agent: ${ua}`,
+      '--header', 'Accept: application/json, */*;q=0.8',
+      '--header', 'Accept-Language: es-NI,es;q=0.9,en-US;q=0.8',
+      '--header', 'Referer: https://fetesa.com.ni/',
+      '--header', 'sec-fetch-dest: empty',
+      '--header', 'sec-fetch-mode: cors',
+      '--header', 'sec-fetch-site: same-origin',
+      '--header', 'Cache-Control: no-cache',
+      targetUrl
+    ];
+
+    const curl = spawn('curl', curlArgs);
+    const chunks = [];
+    curl.stdout.on('data', d => chunks.push(d));
+    curl.stderr.on('data', () => {}); // ignorar stderr de curl
+
+    curl.on('error', (e) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { 'content-type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'curl no disponible: ' + e.message }));
+      }
+    });
+
+    curl.on('close', () => {
+      if (res.headersSent) return;
+      const raw = Buffer.concat(chunks).toString('utf8');
+
+      // Parsear headers y body: curl --include produce:
+      // HTTP/1.1 200 OK\r\nHeader: val\r\n...\r\n\r\n[body]
+      // Con redirects puede haber múltiples bloques de headers → tomar el último.
+      const parts = raw.split(/\r?\n\r?\n/);
+      let headerBlock = '', body = '';
+      // El body es lo que viene después del último bloque de headers HTTP
+      let lastHeaderIdx = -1;
+      for (let i = 0; i < parts.length; i++) {
+        if (/^HTTP\//i.test(parts[i].trimStart())) lastHeaderIdx = i;
+      }
+      if (lastHeaderIdx >= 0) {
+        headerBlock = parts[lastHeaderIdx];
+        body = parts.slice(lastHeaderIdx + 1).join('\n\n');
+      } else {
+        body = raw;
       }
 
-      const opts = {
-        host,
-        path: requestPath,
-        method: 'GET',
-        timeout: 15000,
-        headers: {
-          'host': 'fetesa.com.ni',
-          'accept': 'application/json, text/html, */*;q=0.8',
-          'accept-language': 'es-NI,es;q=0.9,en-US;q=0.8,en;q=0.7',
-          'accept-encoding': 'gzip, deflate, br',
-          'user-agent': ua,
-          'referer': 'https://fetesa.com.ni/',
-          'connection': 'keep-alive',
-          'cache-control': 'no-cache',
-          'pragma': 'no-cache',
-          'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-          'sec-ch-ua-mobile': '?0',
-          'sec-ch-ua-platform': '"Windows"',
-          'sec-fetch-dest': 'empty',
-          'sec-fetch-mode': 'cors',
-          'sec-fetch-site': 'same-origin',
-          'upgrade-insecure-requests': '1',
-          ...(clientCookies ? { 'cookie': clientCookies } : {})
-        }
+      // Leer status code del bloque de headers
+      const statusMatch = headerBlock.match(/^HTTP\/\S+\s+(\d+)/m);
+      const status = statusMatch ? parseInt(statusMatch[1]) : 200;
+
+      // Leer X-WP-Total si existe
+      const totalMatch    = headerBlock.match(/^x-wp-total:\s*(\d+)/im);
+      const totalpMatch   = headerBlock.match(/^x-wp-totalpages:\s*(\d+)/im);
+      const wpTotal       = totalMatch   ? totalMatch[1]  : null;
+      const wpTotalPages  = totalpMatch  ? totalpMatch[1] : null;
+
+      if (status === 403 || status === 429) {
+        res.writeHead(403, { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*' });
+        return res.end(JSON.stringify({
+          error: 'FETESA_BLOCKED',
+          message: 'fetesa.com.ni bloqueó la petición. Intenta de nuevo en unos segundos.'
+        }));
+      }
+
+      const outHeaders = {
+        'content-type': 'application/json; charset=utf-8',
+        'access-control-allow-origin': '*',
+        'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages'
       };
+      if (wpTotal)      outHeaders['x-wp-total']      = wpTotal;
+      if (wpTotalPages) outHeaders['x-wp-totalpages'] = wpTotalPages;
 
-      const proxy = https.request(opts, (up) => {
-        // Seguir redirects 301/302/307/308
-        if ([301, 302, 307, 308].includes(up.statusCode) && up.headers['location']) {
-          up.resume(); // consumir body para liberar conexión
-          let loc = up.headers['location'];
-          // Recoger cookies del redirect para la siguiente petición
-          const setCookie = up.headers['set-cookie'];
-          const newCookies = setCookie ? setCookie.map(c => c.split(';')[0]).join('; ') : clientCookies;
-          // Resolver URL relativa vs absoluta
-          if (loc.startsWith('/')) {
-            return doFetesaRequest('fetesa.com.ni', loc, redirectCount + 1, newCookies);
-          } else if (loc.startsWith('http')) {
-            try {
-              const u = new URL(loc);
-              return doFetesaRequest(u.hostname, u.pathname + u.search, redirectCount + 1, newCookies);
-            } catch(_) {}
-          }
-        }
+      res.writeHead(200, outHeaders);
+      res.end(body.trim(), 'utf8');
+    });
 
-        // Si sigue siendo 403, devolver JSON con mensaje claro
-        if (up.statusCode === 403) {
-          up.resume();
-          res.writeHead(403, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-          return res.end(JSON.stringify({
-            error: 'FETESA_BLOCKED',
-            message: 'fetesa.com.ni bloqueó la petición (WAF/Cloudflare). Intenta de nuevo en unos segundos.'
-          }));
-        }
-
-        // Descomprimir gzip/br si es necesario
-        const zlib = require('zlib');
-        const encoding = up.headers['content-encoding'];
-        const respHeaders = {
-          'content-type':       up.headers['content-type'] || 'application/json; charset=utf-8',
-          'access-control-allow-origin': '*',
-          'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages'
-        };
-        // Pasar totales de paginación de WooCommerce Store API al cliente
-        if (up.headers['x-wp-total'])      respHeaders['x-wp-total']       = up.headers['x-wp-total'];
-        if (up.headers['x-wp-totalpages']) respHeaders['x-wp-totalpages']  = up.headers['x-wp-totalpages'];
-        res.writeHead(up.statusCode, respHeaders);
-
-
-        if (encoding === 'gzip') {
-          up.pipe(zlib.createGunzip()).pipe(res);
-        } else if (encoding === 'br') {
-          up.pipe(zlib.createBrotliDecompress()).pipe(res);
-        } else if (encoding === 'deflate') {
-          up.pipe(zlib.createInflate()).pipe(res);
-        } else {
-          up.pipe(res);
-        }
-      });
-
-      proxy.on('timeout', () => {
-        proxy.destroy();
-        if (!res.headersSent) {
-          res.writeHead(504, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Timeout conectando a fetesa.com.ni' }));
-        }
-      });
-
-      proxy.on('error', (e) => {
-        if (!res.headersSent) {
-          res.writeHead(502, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
-
-      proxy.end();
-    }
-
-    doFetesaRequest('fetesa.com.ni', fullTarget, 0, null);
     return;
   }
 
