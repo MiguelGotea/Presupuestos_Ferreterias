@@ -1,173 +1,64 @@
 // ── CONFIGURACIÓN ──────────────────────────────────────────────────────────
-// Proxy en server.js: /api/fetesa/ → https://fetesa.com.ni/
-// Búsqueda: /?s=QUERY&et_search=true&post_type=product&paged=PAGE
-// Producto: /producto/SLUG/
-const API_SEARCH = '/api/fetesa/';
-const PER_PAGE = 12; // Fetesa muestra aprox 12 por página
+// Proxy en server.js: /api/fetesa/* → https://fetesa.com.ni/*
+// API pública WooCommerce Store API (sin autenticación):
+//   /wp-json/wc/store/v1/products?search=QUERY&per_page=12&page=N
+//   /wp-json/wc/store/v1/products/{id}
+const API_PRODUCTS = '/api/fetesa/wp-json/wc/store/v1/products';
+const PER_PAGE = 12;
 
 const $  = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 const money = n => 'C$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const esc   = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pct   = (p, l) => l > p ? Math.round((1 - p / l) * 100) : 0;
+const stripHtml = s => s ? String(s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+const parseMoney = s => parseFloat(String(s || '0').replace(/[^0-9.]/g, '')) || 0;
 
 let products = [], totalEstimate = 0, page = 1, query = '', sortKey = null, sortDir = 1;
 let ctrl = null, timer = null;
 let showDiscOnly = false;
-let selectedCats = null; // null = sin filtro; Set = categorías
+let selectedCats = null;
 
 const pool = new Map();
 let budget = JSON.parse(localStorage.getItem('fetesa-budget') || '[]');
 
-// ── PARSEAR HTML DE BÚSQUEDA (WooCommerce / Elegant Themes) ────────────────
-function parseSearchHTML(html) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const items = [];
+// ── NORMALIZAR PRODUCTO (WooCommerce Store API v1) ─────────────────────────
+function norm(p) {
+  const prices  = p.prices || {};
+  const price   = parseMoney(prices.price);
+  const regular = parseMoney(prices.regular_price);
+  const listPrice = regular > price ? regular : 0;
 
-  // WooCommerce shop loop: ul.products > li.product  ó  .et_pb_shop .et_pb_product
-  const cards = doc.querySelectorAll('li.product, .et_pb_product');
+  const images = (p.images || []).map(i => i.src || i.thumbnail || '').filter(Boolean);
 
-  cards.forEach(card => {
-    try {
-      // Nombre
-      const titleEl = card.querySelector('h2, h3, .woocommerce-loop-product__title, .entry-title a, .et_pb_module_header a');
-      const name = titleEl ? titleEl.textContent.trim() : '';
-      if (!name) return;
+  const cats = (p.categories || []).map(c => c.name).filter(Boolean);
+  const cat  = cats[cats.length - 1] || '';
 
-      // Enlace / slug
-      const linkEl = card.querySelector('a.woocommerce-LoopProduct-link, a[href*="/producto/"], .et_pb_module_header a, h2 a, h3 a');
-      const link = linkEl ? linkEl.getAttribute('href') : '';
-
-      // Slug como ID
-      const slugMatch = link.match(/\/producto\/([^/]+)\//);
-      const id = slugMatch ? slugMatch[1] : (name.toLowerCase().replace(/[^a-z0-9]/g, '-'));
-
-      // Imagen
-      const imgEl = card.querySelector('img');
-      let image = imgEl ? (imgEl.dataset.src || imgEl.getAttribute('src') || '') : '';
-      // Evitar data URIs/placeholders
-      if (image.startsWith('data:')) image = '';
-
-      // Precio — WooCommerce puede tener: ins (precio rebajado) + del (precio tachado)
-      let price = 0, listPrice = 0;
-      const insDel = card.querySelector('.price ins .amount, .price .ins .amount');
-      const delEl  = card.querySelector('.price del .amount, .price .del .amount');
-      const priceEl = card.querySelector('.price .amount');
-
-      if (insDel) {
-        price = parsePrice(insDel.textContent);
-        if (delEl) listPrice = parsePrice(delEl.textContent);
-      } else if (priceEl) {
-        price = parsePrice(priceEl.textContent);
-      }
-
-      // Categoría (si aparece en la card)
-      const catEl = card.querySelector('.posted_in a, .et_pb_post_category a, .product-category a');
-      const cat = catEl ? catEl.textContent.trim() : '';
-
-      // Stock
-      const stockEl = card.querySelector('.stock');
-      const available = stockEl ? !stockEl.classList.contains('out-of-stock') : true;
-
-      const raw = { id, name, link, image, price, listPrice, cat, available, images: image ? [image] : [], desc: '', sku: '', brand: '', attrs: {} };
-      pool.set(id, raw);
-      items.push(raw);
-    } catch (_) { /* ignorar card con error */ }
-  });
-
-  // Intentar leer total de resultados (paginación de WooCommerce)
-  const totalEl = doc.querySelector('.woocommerce-result-count');
-  let total = items.length;
-  if (totalEl) {
-    const m = totalEl.textContent.match(/(\d+)\s*resultado/i);
-    if (m) total = parseInt(m[1]);
-  }
-
-  return { items, total };
-}
-
-// ── PARSEAR HTML DE DETALLE DE PRODUCTO ────────────────────────────────────
-function parseProductHTML(html, id) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const p = pool.get(id) || {};
-
-  // Nombre
-  const nameEl = doc.querySelector('h1.product_title, h1.entry-title');
-  if (nameEl) p.name = nameEl.textContent.trim();
-
-  // Precio
-  const insDel = doc.querySelector('p.price ins .amount, .price .ins .amount');
-  const delEl  = doc.querySelector('p.price del .amount, .price .del .amount');
-  const priceEl = doc.querySelector('p.price .amount');
-  if (insDel) {
-    p.price = parsePrice(insDel.textContent);
-    if (delEl) p.listPrice = parsePrice(delEl.textContent);
-  } else if (priceEl) {
-    p.price = parsePrice(priceEl.textContent);
-  }
-
-  // SKU
-  const skuEl = doc.querySelector('.sku');
-  if (skuEl) p.sku = skuEl.textContent.trim();
-
-  // Marca
-  const brandEl = doc.querySelector('.posted_in a, .product_meta .brand a, .pa_marca a, .pa_brand a');
-  if (brandEl) p.brand = brandEl.textContent.trim();
-
-  // Categorías
-  const catEls = doc.querySelectorAll('.posted_in a');
-  p.cats = [...catEls].map(e => e.textContent.trim()).filter(Boolean);
-  if (!p.cat && p.cats.length) p.cat = p.cats[p.cats.length - 1];
-
-  // Disponibilidad
-  const stockEl = doc.querySelector('p.stock');
-  p.available = stockEl ? !stockEl.classList.contains('out-of-stock') : true;
-
-  // Imágenes (galería WooCommerce)
-  const imgs = new Set();
-  doc.querySelectorAll('.woocommerce-product-gallery__image img, .flex-control-nav img, .woocommerce-product-gallery img').forEach(img => {
-    const src = img.dataset.large_image || img.dataset.src || img.getAttribute('src') || '';
-    if (src && !src.startsWith('data:')) imgs.add(src);
-  });
-  if (imgs.size) p.images = [...imgs];
-  if (!p.image && p.images && p.images.length) p.image = p.images[0];
-
-  // Descripción corta
-  const shortDesc = doc.querySelector('.woocommerce-product-details__short-description');
-  p.desc = shortDesc ? shortDesc.textContent.trim() : '';
-
-  // Tabla de atributos / especificaciones
   const attrs = {};
-  doc.querySelectorAll('table.shop_attributes tr, table.woocommerce-product-attributes tr').forEach(row => {
-    const th = row.querySelector('th');
-    const td = row.querySelector('td');
-    if (th && td) attrs[th.textContent.trim()] = td.textContent.trim();
+  (p.attributes || []).forEach(a => {
+    if (a.name && a.terms?.length) attrs[a.name] = a.terms.map(t => t.name).join(', ');
   });
-  p.attrs = attrs;
 
-  pool.set(id, p);
-  return p;
-}
-
-// ── PARSEO DE PRECIO (C$1,234.56 → 1234.56) ───────────────────────────────
-function parsePrice(str) {
-  if (!str) return 0;
-  // Eliminar símbolo de moneda y espacios, luego parsear
-  const clean = str.replace(/[^0-9.,]/g, '').trim();
-  // Si tiene coma Y punto: coma=miles, punto=decimal  →  1,234.56
-  // Si solo coma: puede ser decimal (europeo) →  1234,56
-  if (clean.includes('.') && clean.includes(',')) {
-    return parseFloat(clean.replace(/,/g, ''));
-  }
-  if (clean.includes(',') && !clean.includes('.')) {
-    // Verificar si coma separa decimales (2 dígitos al final) o miles
-    const parts = clean.split(',');
-    if (parts[parts.length - 1].length === 2) {
-      return parseFloat(clean.replace(',', '.'));
-    }
-    return parseFloat(clean.replace(/,/g, ''));
-  }
-  return parseFloat(clean) || 0;
+  const raw = {
+    id:        String(p.id),
+    name:      p.name || '',
+    slug:      p.slug || '',
+    link:      p.permalink || '',
+    sku:       p.sku || '',
+    brand:     '',
+    price,
+    listPrice,
+    available: p.is_in_stock !== false,
+    image:     images[0] || '',
+    images,
+    cats,
+    cat,
+    desc:      stripHtml(p.short_description || p.description || ''),
+    attrs,
+    _loaded:   true,
+  };
+  pool.set(raw.id, raw);
+  return raw;
 }
 
 // ── BÚSQUEDA ───────────────────────────────────────────────────────────────
@@ -177,14 +68,14 @@ async function search(reset = true) {
   ctrl?.abort(); ctrl = new AbortController();
   $('#count').textContent = 'Buscando…';
   try {
-    const url = `${API_SEARCH}?s=${encodeURIComponent(query)}&et_search=true&post_type=product&paged=${page}`;
+    const url = `${API_PRODUCTS}?search=${encodeURIComponent(query)}&per_page=${PER_PAGE}&page=${page}&_fields=id,name,slug,permalink,sku,prices,images,categories,attributes,is_in_stock,short_description`;
     const r = await fetch(url, { signal: ctrl.signal });
 
     // Detectar bloqueo WAF/Cloudflare
     if (r.status === 403) {
       let msg = 'fetesa.com.ni bloqueó la petición (Cloudflare WAF).';
       try { const j = await r.json(); if (j.message) msg = j.message; } catch(_) {}
-      $('#results').innerHTML = `<div class="empty" style="line-height:1.8">
+      $('#results').innerHTML = `<div class="empty" style="line-height:1.9">
         ⚠️ <strong>Acceso bloqueado por Cloudflare</strong><br>
         <span style="font-size:11px;color:var(--mu)">${esc(msg)}</span><br><br>
         <button class="btn btn-primary" onclick="search(true)" style="font-size:12px">🔄 Reintentar</button>
@@ -194,28 +85,30 @@ async function search(reset = true) {
     }
 
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const html = await r.text();
 
-    // Si la respuesta es un JSON de error (no HTML)
-    if (html.trimStart().startsWith('{')) {
-      const j = JSON.parse(html);
-      throw new Error(j.message || j.error || 'Error del servidor');
+    // Leer header de total (WooCommerce Store API lo devuelve)
+    const total = parseInt(r.headers.get('X-WP-Total') || r.headers.get('x-wp-total') || '0');
+    const data  = await r.json();
+
+    if (!Array.isArray(data)) {
+      // Podría ser un objeto de error de WP
+      throw new Error(data?.message || 'Respuesta inesperada del servidor');
     }
 
-    const { items, total } = parseSearchHTML(html);
+    const items = data.map(norm);
     products = products.concat(items);
-    totalEstimate = total;
+    totalEstimate = total || products.length;
     render();
+
   } catch (e) {
     if (e.name === 'AbortError') return;
-    $('#results').innerHTML = `<div class="empty">
+    $('#results').innerHTML = `<div class="empty" style="line-height:1.9">
       ❌ <strong>Error:</strong> ${esc(e.message)}<br>
       <span style="font-size:11px;color:var(--mu)">Verifica que server.js está corriendo en el servidor.</span>
     </div>`;
     $('#count').textContent = '';
   }
 }
-
 
 // ── RENDER ─────────────────────────────────────────────────────────────────
 function render() {
@@ -236,10 +129,10 @@ function render() {
   if (showDiscOnly) filtersActive.push('con descuento');
   if (selectedCats !== null) filtersActive.push(`categorías (${selectedCats.size})`);
   const label = filtersActive.length ? ` (${filtersActive.join(', ')})` : '';
-  $('#count').textContent = query.length < 2 ? '' : `${list.length}${label} de ${totalEstimate || products.length}`;
+  $('#count').textContent = query.length < 2 ? '' : `${list.length}${label} de ${totalEstimate}`;
 
   const empty = query.length < 2 ? 'Empieza a escribir para buscar productos.'
-    : (filtersActive.length ? 'Ningún resultado coincide con los filtros aplicados.' : 'Sin resultados.');
+    : (filtersActive.length ? 'Ningún resultado coincide con los filtros aplicados.' : 'Sin resultados para esta búsqueda en Fetesa.');
 
   if (!list.length) {
     $('#results').innerHTML = `<div class="empty">${empty}</div>`;
@@ -258,14 +151,14 @@ function render() {
     </tr></thead><tbody>` +
     list.map(productRow).join('') + '</tbody></table>';
 
-  // Mostrar botón "más" si es posible que haya más páginas
+  // Más resultados si hay más páginas (12 por página)
   $('#more').hidden = products.length >= totalEstimate;
 }
 
 function productRow(p) {
   const d = pct(p.price, p.listPrice);
   return `<tr>
-    <td class="img-cell"><img loading="lazy" src="${esc(p.image || '')}" data-open="${esc(p.id)}" alt="" onerror="this.src='';this.style.display='none'"></td>
+    <td class="img-cell"><img loading="lazy" src="${esc(p.image)}" data-open="${esc(p.id)}" alt="" onerror="this.src='';this.style.display='none'"></td>
     <td>
       <div class="name">${esc(p.name)}</div>
       ${p.sku ? `<div class="sub">SKU: ${esc(p.sku)}</div>` : '<div class="sub">&nbsp;</div>'}
@@ -287,21 +180,17 @@ function productRow(p) {
 async function openModal(id) {
   const p = pool.get(id) || budget.find(x => x.id === id);
   if (!p) return;
-
-  // Mostrar modal con datos básicos primero
   renderModal(p);
   $('#modal').classList.add('on');
 
-  // Si no tenemos detalle completo, cargar la página de producto
-  if (!p._loaded && p.link) {
+  // Cargar detalle completo si no se ha cargado (atributos extras)
+  if (!p._detailLoaded) {
     try {
-      // Convertir link absoluto a ruta proxy
-      const proxyPath = p.link.replace('https://fetesa.com.ni', '/api/fetesa');
-      const r = await fetch(proxyPath);
+      const r = await fetch(`${API_PRODUCTS}/${id}`);
       if (r.ok) {
-        const html = await r.text();
-        const updated = parseProductHTML(html, id);
-        updated._loaded = true;
+        const data = await r.json();
+        const updated = norm(data);
+        updated._detailLoaded = true;
         pool.set(id, updated);
         renderModal(updated);
       }
@@ -349,11 +238,9 @@ function renderModal(p) {
       ${p.sku ? `<div class="section-label">Identificación</div>
       <table class="specs-table">
         <tr><td>SKU</td><td><code>${esc(p.sku)}</code></td></tr>
-        ${p.brand ? `<tr><td>Marca</td><td>${esc(p.brand)}</td></tr>` : ''}
       </table>` : ''}
       ${attrRows ? `<div class="section-label">Especificaciones</div><table class="specs-table">${attrRows}</table>` : ''}
       ${p.desc ? `<div class="section-label">Descripción</div><div class="modal-desc">${esc(p.desc)}</div>` : ''}
-      ${!p._loaded ? '<div style="font-size:11px;color:var(--mu);text-align:center;padding:8px">Cargando detalles…</div>' : ''}
     </div>`;
 }
 

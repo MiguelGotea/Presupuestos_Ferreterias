@@ -83,22 +83,20 @@ http.createServer((req, res) => {
         timeout: 15000,
         headers: {
           'host': 'fetesa.com.ni',
-          'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'accept': 'application/json, text/html, */*;q=0.8',
           'accept-language': 'es-NI,es;q=0.9,en-US;q=0.8,en;q=0.7',
           'accept-encoding': 'gzip, deflate, br',
           'user-agent': ua,
           'referer': 'https://fetesa.com.ni/',
-          'origin': 'https://fetesa.com.ni',
           'connection': 'keep-alive',
           'cache-control': 'no-cache',
           'pragma': 'no-cache',
           'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
           'sec-ch-ua-mobile': '?0',
           'sec-ch-ua-platform': '"Windows"',
-          'sec-fetch-dest': 'document',
-          'sec-fetch-mode': 'navigate',
-          'sec-fetch-site': redirectCount > 0 ? 'same-origin' : 'none',
-          'sec-fetch-user': '?1',
+          'sec-fetch-dest': 'empty',
+          'sec-fetch-mode': 'cors',
+          'sec-fetch-site': 'same-origin',
           'upgrade-insecure-requests': '1',
           ...(clientCookies ? { 'cookie': clientCookies } : {})
         }
@@ -137,10 +135,15 @@ http.createServer((req, res) => {
         const zlib = require('zlib');
         const encoding = up.headers['content-encoding'];
         const respHeaders = {
-          'content-type': up.headers['content-type'] || 'text/html; charset=utf-8',
-          'access-control-allow-origin': '*'
+          'content-type':       up.headers['content-type'] || 'application/json; charset=utf-8',
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages'
         };
+        // Pasar totales de paginación de WooCommerce Store API al cliente
+        if (up.headers['x-wp-total'])      respHeaders['x-wp-total']       = up.headers['x-wp-total'];
+        if (up.headers['x-wp-totalpages']) respHeaders['x-wp-totalpages']  = up.headers['x-wp-totalpages'];
         res.writeHead(up.statusCode, respHeaders);
+
 
         if (encoding === 'gzip') {
           up.pipe(zlib.createGunzip()).pipe(res);
