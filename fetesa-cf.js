@@ -130,80 +130,93 @@ async function ensureSession() {
   }
 }
 
-// ── Navegar con reintentos ──────────────────────────────────────────────────
-async function navigateTo(url) {
+// ── Navegar esperando que el CF challenge se resuelva ──────────────────────
+async function navigateTo(targetUrl) {
   scheduleIdleClose();
+  console.log(`[fetesa-cf] 🔄 Navegando a: ${targetUrl}`);
+
+  // networkidle2 espera a que el JS del CF challenge termine de ejecutarse
   try {
-    await _page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    // Si Cloudflare redirige a un challenge, esperar que se resuelva
-    for (let i = 0; i < 8; i++) {
-      const pageUrl = _page.url();
-      const title   = await _page.title().catch(() => '');
-      if (!title.includes('Just a moment') && !pageUrl.includes('challenge')) break;
-      console.log(`[fetesa-cf] 🔄 CF challenge en ${url} (${i + 1}s)...`);
-      await new Promise(r => setTimeout(r, 1000));
-    }
+    await _page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 40000 });
   } catch(e) {
-    if (!e.message.includes('timeout')) throw e;
-    console.log(`[fetesa-cf] ⚠️ Timeout navegando a ${url} — usando DOM disponible`);
+    console.log(`[fetesa-cf] ⚠️ networkidle2 warn: ${e.message.slice(0, 60)} — continuando...`);
+  }
+
+  const title = await _page.title().catch(() => '');
+  console.log(`[fetesa-cf] 📄 Página cargada: "${title}" | ${_page.url()}`);
+
+  // Si aún hay challenge activo, esperar hasta 15s más
+  if (title.includes('Just a moment') || title === '') {
+    console.log('[fetesa-cf] ⏳ Esperando resolución del challenge de página...');
+    await _page.waitForFunction(
+      () => !document.title.includes('Just a moment') && document.title.trim() !== '',
+      { timeout: 15000 }
+    ).catch(() => console.log('[fetesa-cf] ⚠️ Challenge de página no resuelto en 15s'));
+    const t2 = await _page.title().catch(() => '');
+    console.log(`[fetesa-cf] 📄 Título tras espera: "${t2}"`);
   }
 }
 
-// ── Extractor de productos de página de búsqueda WooCommerce/Divi ───────────
+// ── Búsqueda — navega HTML de WooCommerce y extrae del DOM ─────────────────
 async function fetesaSearch(query, pageNum = 1) {
   await ensureSession();
-  const url = `https://fetesa.com.ni/?s=${encodeURIComponent(query)}&et_search=true&post_type=product&paged=${pageNum}`;
-  await navigateTo(url);
+  const searchUrl = `https://fetesa.com.ni/?s=${encodeURIComponent(query)}&et_search=true&post_type=product&paged=${pageNum}`;
+  await navigateTo(searchUrl);
+
+  // Esperar a que aparezcan productos (máx 10s)
+  await _page.waitForSelector(
+    'li.product, .et_pb_product, article.product, ul.products li',
+    { timeout: 10000 }
+  ).catch(() => console.log('[fetesa-cf] ⚠️ Selectores de producto no encontrados en 10s'));
 
   const result = await _page.evaluate(() => {
-    // Selectores de WooCommerce + tema Divi/Extra
-    const cards = Array.from(document.querySelectorAll(
-      'li.product, .et_pb_product, .product-container, .wc-block-product'
-    ));
+    // Debug: contar elementos con distintos selectores
+    const sels = ['li.product', '.et_pb_product', 'article.product', 'ul.products > li', '.products > li', '[class*="product"]'];
+    const debug = {};
+    sels.forEach(s => { try { debug[s] = document.querySelectorAll(s).length; } catch(_) {} });
+
+    // Recolectar con todos los selectores posibles
+    let cards = Array.from(document.querySelectorAll('li.product, .et_pb_product, article.product'));
+    if (!cards.length) cards = Array.from(document.querySelectorAll('ul.products > li, ol.products > li, .products > li'));
 
     const items = cards.map(el => {
-      // Link y slug
-      const linkEl = el.querySelector('a.woocommerce-LoopProduct-link, .woocommerce-loop-product__link, a[href*="/producto/"], .et_pb_module_inner a');
-      const link   = linkEl?.href || '';
-      const slug   = link.replace(/.*\/producto\//, '').replace(/\/+$/, '');
+      const linkEl = el.querySelector([
+        'a.woocommerce-LoopProduct-link',
+        '.woocommerce-loop-product__link',
+        'a[href*="/producto/"]',
+        'a[href*="/product/"]',
+        '.et_pb_module_inner > a',
+        'h2 > a', 'h3 > a', 'a'
+      ].join(', '));
+      const link = linkEl?.href || '';
+      const slug = link.replace(/.*\/producto\//, '').replace(/.*\/product\//, '').replace(/\/+$/, '');
 
-      // Nombre
-      const name = (
-        el.querySelector('.woocommerce-loop-product__title, .et_pb_title_container h2, h2.woocommerce-loop-product__title, h3, h2')
-          ?.textContent?.trim()
-      ) || '';
+      const name = (el.querySelector(
+        '.woocommerce-loop-product__title, h2, h3, .et_pb_title_container h2, [class*="title"]'
+      )?.textContent?.trim()) || '';
 
-      // Imagen
-      const img = el.querySelector('img')?.src || '';
+      const img = el.querySelector('img')?.src || el.querySelector('img')?.dataset?.src || '';
 
-      // Precios — puede haber precio tachado (lista) y precio actual
       const priceEl = el.querySelector('.price');
-      const bdiList = Array.from(priceEl?.querySelectorAll('bdi, .woocommerce-Price-amount') || []);
-      const prices  = bdiList
-        .map(b => parseFloat(b.textContent.replace(/[^\d.]/g, '')) || 0)
-        .filter(n => n > 0);
-      prices.sort((a, b) => a - b);
+      const amounts = Array.from(priceEl?.querySelectorAll('bdi, .amount, .woocommerce-Price-amount') || []);
+      const prices  = amounts.map(b => parseFloat(b.textContent.replace(/[^\d.,]/g, '').replace(',', '.')) ).filter(n => n > 0 && !isNaN(n)).sort((a, b) => a - b);
       const price     = prices[0] || 0;
       const listPrice = prices.length > 1 ? prices[prices.length - 1] : 0;
 
-      // Disponibilidad
-      const available = !el.querySelector('.out-of-stock, .outofstock');
-
-      if (!name || !link) return null;
-      return { id: slug, name, slug, link, image: img, price, listPrice, available, cats: [], cat: '', sku: '', attrs: {}, _loaded: true };
+      const available = !el.querySelector('.out-of-stock, .outofstock, .stock.out-of-stock');
+      if (!name && !link) return null;
+      return { id: slug || btoa(name).slice(0, 16), name, slug, link, image: img, price, listPrice, available, cats: [], cat: '', sku: '', attrs: {}, desc: '', _loaded: true };
     }).filter(Boolean);
 
-    // Total de resultados
     const countEl = document.querySelector('.woocommerce-result-count');
-    const match   = countEl?.textContent?.match(/(\d+)/g);
-    const total   = match ? parseInt(match[match.length - 1]) : items.length;
+    const totMatch = countEl?.textContent?.match(/(\d+)/g);
+    const total    = totMatch ? parseInt(totMatch[totMatch.length - 1]) : items.length;
+    const hasNext  = !!document.querySelector('.next.page-numbers, .woocommerce-pagination .next');
 
-    // ¿Hay página siguiente?
-    const hasNext = !!document.querySelector('.next.page-numbers, .woocommerce-pagination .next');
-
-    return { items, total, hasNext };
+    return { items, total, hasNext, _debug: debug };
   });
 
+  console.log(`[fetesa-cf] 📦 Extracción: ${result.items.length} items, total=${result.total} | selectores:`, JSON.stringify(result._debug));
   return result;
 }
 
