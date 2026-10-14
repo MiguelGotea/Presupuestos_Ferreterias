@@ -35,13 +35,38 @@ const CHROME_ARGS = [
   '--disable-features=IsolateOrigins,site-per-process,AudioServiceOutOfProcess',
 ];
 
-function getPuppeteer() {
-  try { return require('puppeteer'); } catch(_) {}
-  try { return require('puppeteer-core'); } catch(_) {}
-  const p = path.resolve(__dirname, '../PitayaBot/wsp-clientes/node_modules/puppeteer');
-  try { return require(p); } catch(_) {}
-  throw new Error('puppeteer no encontrado. Ejecuta: npm install puppeteer');
+// ── Obtener puppeteer-extra con stealth ─────────────────────────────────────
+// puppeteer-extra + stealth enmascara las señales de headless Chrome que
+// Cloudflare usa para detectar bots (navigator.webdriver, plugins, etc.)
+function getPuppeteerExtra() {
+  const wspBase = path.resolve(__dirname, '../PitayaBot/wsp-clientes/node_modules');
+
+  // Intentar cargar puppeteer-extra (propio o de wsp-clientes)
+  let puppeteerExtra;
+  try { puppeteerExtra = require('puppeteer-extra'); }
+  catch(_) {
+    try { puppeteerExtra = require(path.join(wspBase, 'puppeteer-extra')); }
+    catch(_) { throw new Error('puppeteer-extra no encontrado. Ejecuta: npm install puppeteer-extra puppeteer-extra-plugin-stealth'); }
+  }
+
+  // Intentar cargar stealth plugin
+  let StealthPlugin;
+  try { StealthPlugin = require('puppeteer-extra-plugin-stealth'); }
+  catch(_) {
+    try { StealthPlugin = require(path.join(wspBase, 'puppeteer-extra-plugin-stealth')); }
+    catch(_) { StealthPlugin = null; }
+  }
+
+  if (StealthPlugin) {
+    puppeteerExtra.use(StealthPlugin());
+    console.log('[fetesa-cf] 🥷 Stealth plugin activo');
+  } else {
+    console.log('[fetesa-cf] ⚠️ Stealth plugin no encontrado — Chrome puede ser detectado como bot');
+  }
+
+  return puppeteerExtra;
 }
+
 
 // ── Sesión persistente ──────────────────────────────────────────────────────
 const IDLE_CLOSE_MS  = 8  * 60 * 1000;  // cerrar Chrome tras 8 min sin uso
@@ -73,7 +98,7 @@ async function closeSession() {
 }
 
 async function startSession() {
-  const puppeteer = getPuppeteer();
+  const puppeteer = getPuppeteerExtra();
   const exe = findChrome();
   if (!exe) throw new Error('Chrome no encontrado: ' + CHROME_PATHS.join(', '));
 
