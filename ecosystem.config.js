@@ -11,7 +11,7 @@ module.exports = {
       restart_delay: 3000,
       max_restarts: 10,
       env: {
-        PORT: "3001",
+        PORT: "3002",
         NODE_ENV: "production"
       },
       error_file: "/root/presupuestos-ferreterias/logs/error.log",

@@ -27,7 +27,7 @@ jobs:
           git pull origin main
 
           echo "🔄 Reiniciando servicio PM2..."
-          fuser -k 3001/tcp 2>/dev/null || true
+          fuser -k 3002/tcp 2>/dev/null || true
           sleep 1
           pm2 delete presupuestos-ferreterias 2>/dev/null || true
           pm2 start ecosystem.config.js
