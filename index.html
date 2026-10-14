@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 
 <head>
@@ -53,6 +53,12 @@
       --sinsa-green-dark: #3a8e2b;
       --sinsa-green-light: #ebf8e9;
       --sinsa-green-border: #bce5b5;
+
+      /* Identidad Fetesa */
+      --fetesa-red: #c0392b;
+      --fetesa-red-dark: #8e1a12;
+      --fetesa-red-light: #fdecea;
+      --fetesa-red-border: #f5c6c6;
 
       --radius-sm: 8px;
       --radius-md: 14px;
@@ -301,6 +307,41 @@
       transform: scale(1.04);
       box-shadow: 0 8px 24px rgba(69, 168, 52, 0.35);
     }
+
+    /* FETESA brand badge */
+    .fetesa-brand-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #8e1a12, #c0392b);
+      border: 1.5px solid var(--fetesa-red-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      flex-shrink: 0;
+      transition: transform 0.22s, box-shadow 0.22s;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      letter-spacing: -1px;
+    }
+
+    .card:hover .fetesa-brand-badge {
+      transform: scale(1.04);
+      box-shadow: 0 8px 24px rgba(192, 57, 43, 0.35);
+    }
+
+    .card-provider.fetesa {
+      color: var(--fetesa-red-dark);
+    }
+
+    .card.card-fetesa:hover .action-circle {
+      background: var(--fetesa-red);
+      border-color: var(--fetesa-red);
+      color: #ffffff;
+    }
+
 
     /* ÍCONOS PARA OTRAS FERRETERÍAS / PLACEHOLDERS */
     .generic-badge {
@@ -582,7 +623,7 @@
     <div class="section-header">
       <div class="section-title-group">
         <span class="section-title">Módulos Disponibles</span>
-        <span class="count-badge" id="card-counter">2 Activos</span>
+        <span class="count-badge" id="card-counter">3 Activos</span>
       </div>
     </div>
 
@@ -646,28 +687,32 @@
         </div>
       </a>
 
-      <!-- PRÓXIMA FERRETERÍA: FETESA DO IT CENTER -->
-      <div class="card soon" id="card-fetesa" data-title="fetesa do it center ferreteria proximamente">
+      <!-- FETESA: PRESUPUESTOS -->
+      <a class="card card-fetesa" href="/ferreterias/fetesa/presupuestos/" id="card-fetesa-presupuestos"
+        data-title="fetesa do it center presupuestos cotizador precios materiales herramientas"
+        data-provider="fetesa">
         <div class="card-top">
-          <div class="generic-badge">🏗️</div>
-          <span class="status-pill soon">Próximamente</span>
+          <div class="fetesa-brand-badge" title="Fetesa Do It Center">F</div>
+          <span class="status-pill active">En L&#237;nea</span>
         </div>
         <div class="card-body">
-          <div class="card-provider">Fetesa Do It Center</div>
-          <h2>Catálogo & Acabados</h2>
-          <p>Integración en desarrollo para consulta de líneas eléctricas, fontanería, herramientas y acabados residenciales.</p>
+          <div class="card-provider fetesa">Fetesa &middot; Cat&#225;logo Web</div>
+          <h2>Cotizador de Presupuestos</h2>
+          <p>Busca materiales, herramientas y acabados con precios en vivo del cat&#225;logo web oficial de Fetesa. Crea presupuestos y exporta tu cotizaci&#243;n.</p>
         </div>
         <div class="card-footer">
           <div class="card-tags">
-            <span class="tag">En integración</span>
-            <span class="tag">Ferretería</span>
+            <span class="tag">Precios en Vivo</span>
+            <span class="tag">Presupuestos</span>
+            <span class="tag">Herramientas</span>
           </div>
           <div class="card-action-btn">
-            <span>Pronto</span>
-            <div class="action-circle">⏳</div>
+            <span>Abrir</span>
+            <div class="action-circle">&#x2192;</div>
           </div>
         </div>
-      </div>
+      </a>
+
 
       <!-- PRÓXIMA FERRETERÍA: PROVEEDORES DE ACERO Y ESTRUCTURA -->
       <div class="card soon" id="card-pesados" data-title="acero materiales pesados estructural hierro proximamente">
@@ -709,6 +754,8 @@
         <a href="/ferreterias/sinsa/presupuestos/" class="footer-link">Sinsa Presupuestos</a>
         <span>·</span>
         <a href="/ferreterias/sinsa/descuentos/" class="footer-link">Sinsa Descuentos</a>
+        <span>·</span>
+        <a href="/ferreterias/fetesa/presupuestos/" class="footer-link">Fetesa Presupuestos</a>
       </div>
     </div>
   </footer>
@@ -747,7 +794,7 @@
       if (query) {
         cardCounter.textContent = visibleCount + (visibleCount === 1 ? ' resultado' : ' resultados');
       } else {
-        cardCounter.textContent = '2 Activos';
+        cardCounter.textContent = '3 Activos';
       }
     }
 

@@ -11,7 +11,8 @@ const PORT = process.env.PORT || 3001;
 
 // ── Configuración de APIs por ferretería ────────────────────────────────────
 const FERRETERIAS_API = {
-  sinsa: 'www.sinsa.com.ni'
+  sinsa:  'www.sinsa.com.ni',
+  fetesa: 'fetesa.com.ni'
 };
 
 // ── Tipos MIME permitidos ───────────────────────────────────────────────────
@@ -30,7 +31,8 @@ const REDIRECTS = {
   '/ferreterias/sinsa/sinsa-presupuestos.html': '/ferreterias/sinsa/presupuestos/',
   '/ferreterias/sinsa/sinsa-descuentos.html':   '/ferreterias/sinsa/descuentos/',
   '/ferreterias/sinsa/presupuestos':            '/ferreterias/sinsa/presupuestos/',
-  '/ferreterias/sinsa/descuentos':               '/ferreterias/sinsa/descuentos/'
+  '/ferreterias/sinsa/descuentos':              '/ferreterias/sinsa/descuentos/',
+  '/ferreterias/fetesa/presupuestos':           '/ferreterias/fetesa/presupuestos/'
 };
 
 // ── Alias específicos de rutas estáticas ────────────────────────────────────
@@ -50,6 +52,43 @@ http.createServer((req, res) => {
   if (REDIRECTS[pathname]) {
     res.writeHead(301, { 'Location': REDIRECTS[pathname] });
     return res.end();
+  }
+
+  // ── Proxy HTML Fetesa (/api/fetesa/*) ──────────────────────────────────────
+  // Fetesa es WooCommerce; hacemos proxy del HTML con cabeceras de navegador.
+  if (pathname.startsWith('/api/fetesa/')) {
+    const targetPath = pathname.replace('/api/fetesa', '');
+    const proxy = https.request(
+      {
+        host: FERRETERIAS_API.fetesa,
+        path: targetPath + (url.search || ''),
+        method: 'GET',
+        headers: {
+          'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'accept-language': 'es-NI,es;q=0.9,en;q=0.8',
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'cache-control': 'no-cache',
+          'pragma': 'no-cache',
+          'sec-fetch-dest': 'document',
+          'sec-fetch-mode': 'navigate',
+          'sec-fetch-site': 'none',
+          'upgrade-insecure-requests': '1'
+        }
+      },
+      (up) => {
+        res.writeHead(up.statusCode, {
+          'content-type': up.headers['content-type'] || 'text/html; charset=utf-8',
+          'access-control-allow-origin': '*'
+        });
+        up.pipe(res);
+      }
+    );
+    proxy.on('error', (e) => {
+      res.writeHead(502);
+      res.end(JSON.stringify({ error: e.message }));
+    });
+    proxy.end();
+    return;
   }
 
   // ── Proxy API Sinsa (/api/sinsa/*) ────────────────────────────────────────
@@ -118,7 +157,8 @@ http.createServer((req, res) => {
   console.log('  🏗️  Presupuestos Ferreterías — servidor listo');
   console.log('  ─────────────────────────────────────────────');
   console.log('  Landing:            http://localhost:' + PORT + '/');
-  console.log('  Sinsa presupuestos: http://localhost:' + PORT + '/ferreterias/sinsa/presupuestos/');
-  console.log('  Sinsa descuentos:   http://localhost:' + PORT + '/ferreterias/sinsa/descuentos/');
+  console.log('  Sinsa presupuestos:  http://localhost:' + PORT + '/ferreterias/sinsa/presupuestos/');
+  console.log('  Sinsa descuentos:    http://localhost:' + PORT + '/ferreterias/sinsa/descuentos/');
+  console.log('  Fetesa presupuestos: http://localhost:' + PORT + '/ferreterias/fetesa/presupuestos/');
   console.log('');
 });
