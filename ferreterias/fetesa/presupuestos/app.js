@@ -1,8 +1,15 @@
 // ── CONFIGURACIÓN ──────────────────────────────────────────────────────────
-// Proxy en server.js (/api/fetesa/) usa curl como subprocess para pasar
-// el WAF de Cloudflare (curl tiene firma TLS distinta a Node.js).
-// API pública WooCommerce Store API (sin autenticación).
-const API_PRODUCTS = '/api/fetesa/wp-json/wc/store/v1/products';
+// Fetesa bloquea el VPS y no tiene CORS headers. Solución: CORS proxies
+// públicos que hacen el fetch desde IPs residenciales/no-VPS.
+// Se prueban en orden hasta que uno funcione.
+const FETESA_API = 'https://fetesa.com.ni/wp-json/wc/store/v1/products';
+
+// CORS proxies públicos (se prueban en orden)
+const CORS_WRAPPERS = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `/api/fetesa/wp-json/wc/store/v1/products${url.includes('?') ? url.slice(url.indexOf('?')) : ''}`, // VPS como último recurso
+];
 const PER_PAGE = 12;
 
 const $  = s => document.querySelector(s);
@@ -60,42 +67,44 @@ function norm(p) {
   return raw;
 }
 
+// ── PROXY ACTIVO (persiste entre búsquedas) ────────────────────────────────
+let workingProxyIdx = 0; // empieza por corsproxy.io
+
+async function fetchWithProxy(apiUrl, signal) {
+  // Intentar desde el proxy actual; si falla, probar el siguiente
+  for (let i = workingProxyIdx; i < CORS_WRAPPERS.length; i++) {
+    const proxyUrl = CORS_WRAPPERS[i](apiUrl);
+    try {
+      const r = await fetch(proxyUrl, { signal });
+      if (r.ok || r.status === 404) {
+        workingProxyIdx = i; // guardar el que funcionó
+        return r;
+      }
+      // 403/429 → intentar siguiente proxy
+      console.warn(`Proxy ${i} falló con ${r.status}, intentando siguiente…`);
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+      console.warn(`Proxy ${i} error: ${e.message}, intentando siguiente…`);
+    }
+  }
+  throw new Error('Todos los proxies fallaron. Fetesa puede estar caído o bloqueando completamente.');
+}
+
 // ── BÚSQUEDA ───────────────────────────────────────────────────────────────
 async function search(reset = true) {
-  if (reset) { page = 1; products = []; selectedCats = null; }
+  if (reset) { page = 1; products = []; selectedCats = null; workingProxyIdx = 0; }
   if (query.length < 2) { render(); return; }
   ctrl?.abort(); ctrl = new AbortController();
   $('#count').textContent = 'Buscando…';
   try {
-    const url = `${API_PRODUCTS}?search=${encodeURIComponent(query)}&per_page=${PER_PAGE}&page=${page}&_fields=id,name,slug,permalink,sku,prices,images,categories,attributes,is_in_stock,short_description`;
-    const r = await fetch(url, { signal: ctrl.signal });
+    const apiUrl = `${FETESA_API}?search=${encodeURIComponent(query)}&per_page=${PER_PAGE}&page=${page}&_fields=id,name,slug,permalink,sku,prices,images,categories,attributes,is_in_stock,short_description`;
+    const r = await fetchWithProxy(apiUrl, ctrl.signal);
 
-    // Detectar bloqueo WAF/Cloudflare
-    if (r.status === 403) {
-      let msg = 'fetesa.com.ni bloqueó la petición.';
-      try { const j = await r.json(); if (j.message) msg = j.message; } catch(_) {}
-      $('#results').innerHTML = `<div class="empty" style="line-height:1.9">
-        ⚠️ <strong>Acceso bloqueado</strong><br>
-        <span style="font-size:11px;color:var(--mu)">${esc(msg)}</span><br><br>
-        <a href="https://fetesa.com.ni" target="_blank" rel="noopener" class="btn btn-sec" style="font-size:12px;display:inline-block;margin-bottom:8px">
-          🌐 Abrir Fetesa primero
-        </a>&nbsp;
-        <button class="btn btn-primary" onclick="search(true)" style="font-size:12px">🔄 Reintentar</button><br>
-        <span style="font-size:10px;color:var(--mu)">Abre Fetesa en otra pestaña para obtener cookies de Cloudflare, luego reintenta.</span>
-      </div>`;
-      $('#count').textContent = '';
-      return;
-    }
-
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-
-    // Leer header de total (WooCommerce Store API lo devuelve)
     const total = parseInt(r.headers.get('X-WP-Total') || r.headers.get('x-wp-total') || '0');
     const data  = await r.json();
 
     if (!Array.isArray(data)) {
-      // Podría ser un objeto de error de WP
-      throw new Error(data?.message || 'Respuesta inesperada del servidor');
+      throw new Error(data?.message || data?.code || 'Respuesta inesperada');
     }
 
     const items = data.map(norm);
@@ -106,12 +115,14 @@ async function search(reset = true) {
   } catch (e) {
     if (e.name === 'AbortError') return;
     $('#results').innerHTML = `<div class="empty" style="line-height:1.9">
-      ❌ <strong>Error:</strong> ${esc(e.message)}<br>
-      <span style="font-size:11px;color:var(--mu)">Verifica que server.js está corriendo en el servidor.</span>
+      ❌ <strong>No se pudo conectar a Fetesa</strong><br>
+      <span style="font-size:11px;color:var(--mu)">${esc(e.message)}</span><br><br>
+      <button class="btn btn-primary" onclick="workingProxyIdx=0;search(true)" style="font-size:12px">🔄 Reintentar todos los proxies</button>
     </div>`;
     $('#count').textContent = '';
   }
 }
+
 
 // ── RENDER ─────────────────────────────────────────────────────────────────
 function render() {
