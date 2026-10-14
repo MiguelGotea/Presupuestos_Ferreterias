@@ -1,19 +1,19 @@
-// fetesa-cf.js — Resuelve el Cloudflare JS Challenge de fetesa.com.ni
-// usando Puppeteer (headless Chrome). Cachea cf_clearance ~50 min.
-//
-// Usa el mismo setup de Chrome/Puppeteer que ya funciona en este VPS
-// (copiado de wsp-clientes/src/whatsapp/client.js).
-//
-// REQUISITOS (ya instalados en el VPS por wsp-clientes):
-//   puppeteer ^21.0.0  (en node_modules del proyecto, o global)
-//   /usr/bin/google-chrome-stable  o  /usr/bin/chromium
-
 'use strict';
+// fetesa-cf.js — Sesión persistente de Chrome para fetesa.com.ni
+//
+// El cf_clearance está vinculado a la firma TLS del browser (JA3).
+// Si curl (JA3 diferente) intenta usarlo, CF lo rechaza.
+// Solución: usar el mismo Chrome para hacer los fetches via page.evaluate().
+//
+// Arquitectura:
+//   1. Lanzar Chrome y cargar fetesa.com.ni (resuelve CF JS challenge)
+//   2. Reusar esa pestaña para fetch() internos (mismo origen, sin CORS)
+//   3. Cerrar Chrome después de N minutos de inactividad (liberar RAM)
 
 const fs   = require('fs');
 const path = require('path');
 
-// ── Detectar Chrome (mismo orden que wsp-clientes) ─────────────────────────
+// ── Rutas Chrome (mismo orden que wsp-clientes) ─────────────────────────────
 const CHROME_PATHS = [
   '/usr/bin/google-chrome-stable',
   '/usr/bin/google-chrome',
@@ -21,176 +21,200 @@ const CHROME_PATHS = [
   '/usr/bin/chromium-browser',
   '/snap/bin/chromium',
 ];
-
-function findChromePath() {
+function findChrome() {
   return CHROME_PATHS.find(p => fs.existsSync(p)) || null;
 }
 
-// ── Args de Chrome probados y funcionales en el VPS (de wsp-clientes) ──────
+// ── Args Chrome probados en el VPS (de wsp-clientes) ───────────────────────
 const CHROME_ARGS = [
-  '--no-sandbox',
-  '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',
-  '--disable-gpu',
-  // Prevenir throttling que causa timeouts en background
-  '--disable-background-timer-throttling',
-  '--disable-backgrounding-occluded-windows',
-  '--disable-renderer-backgrounding',
-  '--no-zygote',
-  '--no-first-run',
-  '--disable-extensions',
-  '--disable-background-networking',
-  '--disable-breakpad',
-  '--disable-component-update',
-  '--disable-domain-reliability',
-  '--disable-sync',
-  '--disable-translate',
-  '--metrics-recording-only',
-  '--mute-audio',
-  '--no-default-browser-check',
+  '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+  '--disable-gpu', '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
+  '--no-zygote', '--no-first-run', '--disable-extensions',
+  '--disable-background-networking', '--disable-breakpad',
+  '--disable-component-update', '--disable-domain-reliability',
+  '--disable-sync', '--disable-translate', '--metrics-recording-only',
+  '--mute-audio', '--no-default-browser-check',
   '--disable-features=IsolateOrigins,site-per-process,AudioServiceOutOfProcess',
 ];
 
-// ── Cache de cf_clearance ───────────────────────────────────────────────────
-let _cfCookies   = null;  // string completo "name=val; name2=val2"
-let _cfExpiry    = 0;
-let _refreshing  = false;
-let _refreshQueue = [];
-
-// ── Obtener puppeteer (del proyecto o del wsp-clientes vecino) ──────────────
+// ── Obtener puppeteer ───────────────────────────────────────────────────────
 function getPuppeteer() {
-  // 1. Del propio proyecto (si se instaló)
   try { return require('puppeteer'); } catch(_) {}
   try { return require('puppeteer-core'); } catch(_) {}
-
-  // 2. Del node_modules de wsp-clientes (mismo VPS)
-  const wspPuppeteer = path.resolve(__dirname, '../PitayaBot/wsp-clientes/node_modules/puppeteer');
-  try { return require(wspPuppeteer); } catch(_) {}
-
-  throw new Error(
-    'puppeteer no encontrado. Ejecuta en el directorio del proyecto:\n' +
-    '  npm install puppeteer\n' +
-    'O está disponible en PitayaBot/wsp-clientes si agregas el path correcto.'
-  );
+  const wspPath = path.resolve(__dirname, '../PitayaBot/wsp-clientes/node_modules/puppeteer');
+  try { return require(wspPath); } catch(_) {}
+  throw new Error('puppeteer no encontrado. Ejecuta: npm install puppeteer');
 }
 
-// ── Lanzar Chrome y obtener cookies de Cloudflare ──────────────────────────
-async function refreshCfCookies() {
-  const puppeteer = getPuppeteer();
-  const executablePath = findChromePath();
+// ── Sesión persistente ──────────────────────────────────────────────────────
+const IDLE_CLOSE_MS  = 8 * 60 * 1000;  // cerrar Chrome tras 8 min sin uso
+const SESSION_TTL_MS = 45 * 60 * 1000; // refrescar sesión cada 45 min
 
+let _browser     = null;
+let _page        = null;
+let _sessionAt   = 0;    // cuándo se obtuvo cf_clearance
+let _lastUseAt   = 0;    // último uso
+let _idleTimer   = null;
+let _starting    = false;
+let _startQueue  = [];
+
+// Cerrar Chrome por inactividad
+function scheduleIdleClose() {
+  if (_idleTimer) clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(async () => {
+    console.log('[fetesa-cf] 💤 Inactividad — cerrando Chrome para liberar RAM');
+    await closeSession();
+  }, IDLE_CLOSE_MS);
+}
+
+async function closeSession() {
+  if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+  _page    = null;
+  _sessionAt = 0;
+  if (_browser) {
+    try { await _browser.close(); } catch(_) {}
+    _browser = null;
+    console.log('[fetesa-cf] 🔒 Chrome cerrado.');
+  }
+}
+
+// Lanzar Chrome y resolver CF challenge
+async function startSession() {
+  const puppeteer = getPuppeteer();
+  const executablePath = findChrome();
   if (!executablePath) {
-    throw new Error(
-      'Chrome/Chromium no encontrado en el sistema.\n' +
-      'Rutas buscadas: ' + CHROME_PATHS.join(', ')
-    );
+    throw new Error('Chrome/Chromium no encontrado. Rutas: ' + CHROME_PATHS.join(', '));
   }
 
-  console.log(`[fetesa-cf] 🌐 Lanzando Chrome (${executablePath}) para resolver CF challenge...`);
+  console.log(`[fetesa-cf] 🌐 Lanzando Chrome (${executablePath})...`);
+  await closeSession(); // limpiar si había algo
 
-  const browser = await puppeteer.launch({
+  _browser = await puppeteer.launch({
     headless: 'new',
     executablePath,
     args: CHROME_ARGS,
     timeout: 30000,
   });
 
+  _page = await _browser.newPage();
+  await _page.setUserAgent(
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+  );
+
+  // Cargar homepage para resolver el JS challenge
+  console.log('[fetesa-cf] 🔄 Cargando fetesa.com.ni...');
   try {
-    const page = await browser.newPage();
-
-    // UA idéntico al que usa wsp-clientes para consistencia
-    await page.setUserAgent(
-      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-    );
-
-    // Cargar homepage para resolver el JS challenge de Cloudflare.
-    // ⚠️ NO usar 'networkidle2' — el JS Challenge hace muchos requests y
-    //    supera el timeout. Usamos 'domcontentloaded' + espera manual.
-    console.log('[fetesa-cf] 🔄 Cargando fetesa.com.ni...');
-    try {
-      await page.goto('https://fetesa.com.ni/', {
-        waitUntil: 'domcontentloaded',
-        timeout: 45000,
-      });
-    } catch (navErr) {
-      // Incluso si hay timeout en la navegación, el CF challenge puede
-      // haber establecido cookies ya. Continuamos y verificamos.
-      console.log(`[fetesa-cf] ⚠️ Navigation warn: ${navErr.message} — verificando cookies igualmente...`);
-    }
-
-    // Esperar hasta 20 segundos a que CF resuelva el challenge y setee cf_clearance
-    console.log('[fetesa-cf] ⏳ Esperando resolución del CF challenge...');
-    let allCookies = [];
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 1000));
-      allCookies = await page.cookies('https://fetesa.com.ni').catch(() => []);
-      const hasClearance = allCookies.some(c => c.name === 'cf_clearance');
-      if (hasClearance) {
-        console.log(`[fetesa-cf] ✅ cf_clearance obtenido en ${i + 1}s`);
-        break;
-      }
-      if (i % 5 === 4) console.log(`[fetesa-cf] ... esperando CF (${i + 1}s)`);
-    }
-
-    if (!allCookies.length) {
-      throw new Error('No se obtuvieron cookies de fetesa.com.ni');
-    }
-
-    // Construir string de cookies para el header Cookie: de curl
-    const cookieStr = allCookies
-      .filter(c => c.name && c.value)
-      .map(c => `${c.name}=${c.value}`)
-      .join('; ');
-
-    const hasClearance = allCookies.some(c => c.name === 'cf_clearance');
-    const ttl = hasClearance ? 50 * 60 * 1000 : 5 * 60 * 1000; // 50 min / 5 min sin clearance
-
-    _cfCookies = cookieStr;
-    _cfExpiry  = Date.now() + ttl;
-
-    console.log(`[fetesa-cf] ✅ Cookies guardadas. cf_clearance: ${hasClearance ? 'SÍ' : 'NO'}. TTL: ${ttl / 60000} min`);
-    return cookieStr;
-
-  } finally {
-    await browser.close();
-    console.log('[fetesa-cf] 🔒 Chrome cerrado.');
+    await _page.goto('https://fetesa.com.ni/', {
+      waitUntil: 'domcontentloaded',
+      timeout: 45000,
+    });
+  } catch(e) {
+    console.log(`[fetesa-cf] ⚠️ goto warn: ${e.message} — continuando...`);
   }
+
+  // Esperar cf_clearance (hasta 20s)
+  console.log('[fetesa-cf] ⏳ Esperando CF challenge...');
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    const cookies = await _page.cookies('https://fetesa.com.ni').catch(() => []);
+    const ok = cookies.some(c => c.name === 'cf_clearance');
+    if (ok) {
+      console.log(`[fetesa-cf] ✅ cf_clearance obtenido (${i + 1}s)`);
+      break;
+    }
+    if (i % 5 === 4) console.log(`[fetesa-cf] ... esperando (${i + 1}s)`);
+  }
+
+  _sessionAt = Date.now();
+  _lastUseAt = Date.now();
+  scheduleIdleClose();
+  console.log('[fetesa-cf] ✅ Sesión lista');
 }
 
-// ── API pública ─────────────────────────────────────────────────────────────
+// Asegurar que la sesión esté activa y fresca
+async function ensureSession() {
+  const sessionExpired = !_sessionAt || (Date.now() - _sessionAt) > SESSION_TTL_MS;
+  const pageAlive = _page && !_page.isClosed();
 
-/**
- * Obtiene el string de cookies CF válidas (del cache o renovando con Chrome).
- * Las peticiones concurrentes se encolan y comparten el mismo refresh.
- */
-async function getCfCookie() {
-  // Cache válido
-  if (_cfCookies && Date.now() < _cfExpiry) return _cfCookies;
+  if (pageAlive && !sessionExpired) return; // sesión OK
 
-  // Ya hay un refresh en curso — encolar
-  if (_refreshing) {
-    return new Promise((resolve, reject) => _refreshQueue.push({ resolve, reject }));
+  // Si ya hay un inicio en curso, encolar
+  if (_starting) {
+    return new Promise((resolve, reject) => _startQueue.push({ resolve, reject }));
   }
 
-  _refreshing = true;
+  _starting = true;
   try {
-    const cookies = await refreshCfCookies();
-    _refreshQueue.forEach(p => p.resolve(cookies));
-    return cookies;
+    await startSession();
+    _startQueue.forEach(p => p.resolve());
   } catch(e) {
-    _refreshQueue.forEach(p => p.reject(e));
+    _startQueue.forEach(p => p.reject(e));
     throw e;
   } finally {
-    _refreshing = false;
-    _refreshQueue = [];
+    _starting = false;
+    _startQueue = [];
   }
 }
 
-/** Fuerza renovación en la próxima petición */
-function invalidateCfCache() {
-  _cfCookies = null;
-  _cfExpiry  = 0;
-  console.log('[fetesa-cf] 🔄 Cache CF invalidado — próxima petición abrirá Chrome.');
+// ── Fetch API usando Chrome interno (mismo origen = sin CORS) ───────────────
+async function fetesaFetch(apiUrl) {
+  await ensureSession();
+  _lastUseAt = Date.now();
+  scheduleIdleClose(); // resetear timer de inactividad
+
+  // page.evaluate hace fetch() desde el contexto de Chrome (fetesa.com.ni)
+  // → mismo origen, misma firma TLS, cookies CF incluidas automáticamente
+  const result = await _page.evaluate(async (url) => {
+    try {
+      const r = await fetch(url, {
+        headers: {
+          'Accept': 'application/json, */*;q=0.8',
+          'Accept-Language': 'es-NI,es;q=0.9',
+        },
+        credentials: 'include', // incluir cookies CF
+      });
+      const xTotal      = r.headers.get('x-wp-total')      || '';
+      const xTotalPages = r.headers.get('x-wp-totalpages') || '';
+      const text        = await r.text();
+      return { ok: r.ok, status: r.status, text, xTotal, xTotalPages, error: null };
+    } catch(e) {
+      return { ok: false, status: 0, text: '', xTotal: '', xTotalPages: '', error: e.message };
+    }
+  }, apiUrl);
+
+  // Si CF bloqueó (respuesta HTML), refrescar sesión y reintentar una vez
+  if (result.text && result.text.trimStart().startsWith('<') && !result.error) {
+    console.log('[fetesa-cf] ⚠️ Respuesta HTML — refrescando sesión CF...');
+    _sessionAt = 0; // forzar re-init
+    await ensureSession();
+    return _page.evaluate(async (url) => {
+      try {
+        const r = await fetch(url, {
+          headers: { 'Accept': 'application/json, */*;q=0.8' },
+          credentials: 'include',
+        });
+        const xTotal      = r.headers.get('x-wp-total')      || '';
+        const xTotalPages = r.headers.get('x-wp-totalpages') || '';
+        const text        = await r.text();
+        return { ok: r.ok, status: r.status, text, xTotal, xTotalPages, error: null };
+      } catch(e) {
+        return { ok: false, status: 0, text: '', xTotal: '', xTotalPages: '', error: e.message };
+      }
+    }, apiUrl);
+  }
+
+  return result;
 }
 
-module.exports = { getCfCookie, invalidateCfCache };
+// Calentar sesión en background (llamar al inicio del servidor)
+async function warmUp() {
+  try {
+    await ensureSession();
+    console.log('[fetesa-cf] 🔥 Sesión precalentada');
+  } catch(e) {
+    console.log(`[fetesa-cf] ⚠️ Warmup falló: ${e.message}`);
+  }
+}
+
+module.exports = { fetesaFetch, warmUp, closeSession };
