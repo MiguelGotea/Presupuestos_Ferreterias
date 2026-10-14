@@ -27,7 +27,10 @@ jobs:
           git pull origin main
 
           echo "🔄 Reiniciando servicio PM2..."
-          pm2 restart presupuestos-ferreterias || pm2 start ecosystem.config.js
+          fuser -k 3001/tcp 2>/dev/null || true
+          sleep 1
+          pm2 delete presupuestos-ferreterias 2>/dev/null || true
+          pm2 start ecosystem.config.js
 
           echo "💾 Guardando estado PM2..."
           pm2 save
