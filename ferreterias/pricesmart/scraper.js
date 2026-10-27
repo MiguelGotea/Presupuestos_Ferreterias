@@ -16,11 +16,58 @@ const path = require('path');
 const HOME_URL = 'https://www.pricesmart.com/es-ni/home';
 const PROMOTIONS_URL = 'https://www.pricesmart.com/es-ni/ahorros-del-fabricante';
 const OUT_FILE = path.resolve(__dirname, 'data', 'productos.json');
-const TIMEOUT = 60000;
+const PROGRESS_FILE = path.resolve(__dirname, 'data', 'catalog-progress.json');
+// PriceSmart puede responder lento durante una descarga grande. El progreso se
+// guarda por página, así que es preferible detenerse y reanudar que omitir datos.
+const TIMEOUT = Number(process.env.PRICESMART_TIMEOUT_MS || 180000);
+const NAVIGATION_RETRIES = Number(process.env.PRICESMART_NAVIGATION_RETRIES || 5);
 const MAX_CATALOG_PAGES = 500;
 const MAX_PROMOTION_PAGES = 40;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function readProgress() {
+  try {
+    const progress = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+    return progress?.version === 1 && Array.isArray(progress.products) && !progress.complete ? progress : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJsonAtomically(file, data) {
+  const temporary = `${file}.tmp`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(temporary, JSON.stringify(data), 'utf8');
+  fs.renameSync(temporary, file);
+}
+
+function saveProgress(categories, products, categoryIndex, pageNumber) {
+  writeJsonAtomically(PROGRESS_FILE, {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    categories,
+    nextCategoryIndex: categoryIndex,
+    nextPageNumber: pageNumber,
+    products
+  });
+}
+
+async function visit(page, url, label) {
+  let lastError;
+  for (let attempt = 1; attempt <= NAVIGATION_RETRIES; attempt++) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+      return true;
+    } catch (error) {
+      lastError = error;
+      console.log(`    ⚠️ ${label}: intento ${attempt}/${NAVIGATION_RETRIES} — ${error.message.slice(0, 110)}`);
+      if (attempt < NAVIGATION_RETRIES) await sleep(5000 * attempt);
+    }
+  }
+  console.log(`    🔴 ${label}: falló tras ${NAVIGATION_RETRIES} intentos (${lastError.message.slice(0, 90)})`);
+  return false;
+}
 
 async function collectPage(page, category = '') {
   await page.waitForSelector('div[id^="product-card-"]', { timeout: TIMEOUT }).catch(() => {});
@@ -85,7 +132,7 @@ async function goToNextPage(page, previousIds) {
 }
 
 async function getCategories(page) {
-  await page.goto(HOME_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+  if (!(await visit(page, HOME_URL, 'menú de categorías'))) throw new Error('No se pudo cargar el menú de categorías');
   await page.waitForSelector('#btnCategoriesMenu', { timeout: TIMEOUT });
   await page.click('#btnCategoriesMenu');
   await page.waitForSelector('a[id^="category_"]', { timeout: TIMEOUT });
@@ -96,26 +143,40 @@ async function getCategories(page) {
 
 async function scrapeCatalog(page) {
   const categories = await getCategories(page);
-  const all = [];
+  const progress = readProgress();
+  const all = progress?.products || [];
+  const startCategory = Math.min(progress?.nextCategoryIndex || 0, categories.length);
+  const startPage = Math.max(progress?.nextPageNumber || 1, 1);
   console.log(`  📂 ${categories.length} categorías principales detectadas`);
+  if (progress) console.log(`  ↻ Reanudando desde ${categories[startCategory]?.name || 'promociones'}, página ${startPage} (${all.length} registros ya guardados)`);
 
-  for (const category of categories) {
+  for (let categoryIndex = startCategory; categoryIndex < categories.length; categoryIndex++) {
+    const category = categories[categoryIndex];
     console.log(`\n  ${category.name}`);
-    for (let number = 1; number <= MAX_CATALOG_PAGES; number++) {
+    const firstPage = categoryIndex === startCategory ? startPage : 1;
+    for (let number = firstPage; number <= MAX_CATALOG_PAGES; number++) {
       const url = new URL(category.url);
       url.searchParams.set('page', String(number));
-      await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+      if (!(await visit(page, url.href, `${category.name} p${number}`))) {
+        // No avanzar a la página siguiente: impedir un catálogo incompleto.
+        saveProgress(categories, all, categoryIndex, number);
+        throw new Error(`No se pudo descargar ${category.name}, página ${number}. Vuelve a ejecutar el comando para reanudar.`);
+      }
       const products = await collectPage(page, category.name);
-      if (!products.length) break;
+      if (!products.length) {
+        saveProgress(categories, all, categoryIndex + 1, 1);
+        break;
+      }
       all.push(...products);
       console.log(`    p${number}: ${products.length} productos (acum ${all.length})`);
+      saveProgress(categories, all, categoryIndex, number + 1);
     }
   }
   return { categories, products: all };
 }
 
 async function scrapePromotions(page) {
-  await page.goto(PROMOTIONS_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+  if (!(await visit(page, PROMOTIONS_URL, 'Ahorros del Fabricante'))) return [];
   const all = [];
   let lastIds = [];
   console.log('\n  Ahorros del Fabricante');
@@ -176,8 +237,7 @@ async function scrapePromotions(page) {
     const products = [...byId.values()];
     const withDiscount = products.filter(product => product.listPrice > product.price).length;
 
-    fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
-    fs.writeFileSync(OUT_FILE, JSON.stringify({
+    writeJsonAtomically(OUT_FILE, {
       generatedAt: new Date().toISOString(),
       source: HOME_URL,
       promotionsSource: PROMOTIONS_URL,
@@ -186,7 +246,13 @@ async function scrapePromotions(page) {
       withPromotion: products.filter(product => product.isPromotion).length,
       withDiscount,
       products
-    }), 'utf8');
+    });
+    writeJsonAtomically(PROGRESS_FILE, {
+      version: 1,
+      complete: true,
+      completedAt: new Date().toISOString(),
+      totalProducts: products.length
+    });
 
     console.log('\n══════════════════════════════════════════════');
     console.log(`  ✅ ${products.length} productos únicos`);
