@@ -39,6 +39,16 @@ function readProgress() {
   }
 }
 
+function readPublishedCatalog() {
+  try {
+    const catalog = JSON.parse(fs.readFileSync(OUT_FILE, 'utf8'));
+    if (!Array.isArray(catalog?.products)) throw new Error('productos inválidos');
+    return catalog;
+  } catch (error) {
+    throw new Error(`No se puede actualizar solo promociones: falta un catálogo válido en ${OUT_FILE} (${error.message})`);
+  }
+}
+
 function waitSync(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
@@ -104,7 +114,12 @@ async function collectPage(page, category = '') {
       const image = card.querySelector('img.sf-image, img:not([alt="Placeholder"])');
       const regular = money(card.querySelector('.sf-price__regular')?.textContent);
       const special = money(card.querySelector('.sf-price__special')?.textContent);
-      const previous = money(card.querySelector('.sf-price__old')?.textContent);
+      // En “Ahorros del Fabricante” el precio anterior publicado no está en
+      // .sf-price__old: PriceSmart lo expone como .original-price.
+      const previous = Math.max(
+        money(card.querySelector('.sf-price__old')?.textContent),
+        money(card.querySelector('.original-price')?.textContent)
+      );
       const price = special || regular;
       const listPrice = previous > price ? previous : 0;
       const availableText = card.querySelector('.product-card__availability--container')?.textContent || '';
@@ -121,7 +136,8 @@ async function collectPage(page, category = '') {
         listPrice,
         image: image?.currentSrc || image?.src || '',
         available: !/fuera de inventario|no disponible/i.test(availableText),
-        promotion: card.querySelector('.promo-container')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        promotion: card.querySelector('.promo-tag, .promo-container')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        saving: money(card.querySelector('.saving-price_label')?.textContent),
         isPromotion: false
       };
     }).filter(product => product.id && product.name && product.price);
@@ -221,8 +237,9 @@ async function scrapePromotions(page) {
 }
 
 (async () => {
+  const promotionsOnly = process.argv.includes('--promotions-only');
   console.log('\n══════════════════════════════════════════════');
-  console.log('  PriceSmart — Descarga completa del catálogo');
+  console.log(`  PriceSmart — ${promotionsOnly ? 'Actualización de promociones' : 'Descarga completa del catálogo'}`);
   console.log('══════════════════════════════════════════════\n');
 
   const browser = await puppeteer.launch({
@@ -241,7 +258,21 @@ async function scrapePromotions(page) {
       if (['image', 'font', 'media'].includes(type) || /google-analytics|googletagmanager|hotjar|doubleclick|newrelic/i.test(url)) request.abort();
       else request.continue();
     });
-    const catalog = await scrapeCatalog(page);
+    const previousCatalog = promotionsOnly ? readPublishedCatalog() : null;
+    const catalog = previousCatalog
+      ? { categories: [], products: previousCatalog.products }
+      : await scrapeCatalog(page);
+    if (previousCatalog) {
+      console.log(`  📂 Reutilizando ${catalog.products.length} productos del catálogo ya descargado`);
+      // La campaña puede cambiar; se limpian únicamente sus marcas anteriores.
+      for (const product of catalog.products) {
+        if (!product.isPromotion) continue;
+        product.isPromotion = false;
+        product.promotion = '';
+        product.listPrice = 0;
+        product.saving = 0;
+      }
+    }
     const promotions = await scrapePromotions(page);
     const byId = new Map();
     for (const product of catalog.products) {
@@ -253,9 +284,11 @@ async function scrapePromotions(page) {
     for (const product of byId.values()) {
       const promotion = promotionById.get(product.id);
       if (!promotion) continue;
+      const category = product.cat;
+      Object.assign(product, promotion);
+      product.cat = category;
       product.isPromotion = true;
       product.promotion = promotion.promotion || 'Más Ahorros';
-      if (promotion.listPrice > product.price) product.listPrice = promotion.listPrice;
     }
     for (const promotion of promotions) {
       if (!byId.has(promotion.id)) byId.set(promotion.id, {
@@ -269,22 +302,24 @@ async function scrapePromotions(page) {
       generatedAt: new Date().toISOString(),
       source: HOME_URL,
       promotionsSource: PROMOTIONS_URL,
-      categoryCount: catalog.categories.length,
+      categoryCount: previousCatalog?.categoryCount || catalog.categories.length,
       totalProducts: products.length,
       withPromotion: products.filter(product => product.isPromotion).length,
       withDiscount,
       products
     });
-    writeJsonSafely(PROGRESS_FILE, {
-      version: 1,
-      complete: true,
-      completedAt: new Date().toISOString(),
-      totalProducts: products.length
-    });
+    if (!promotionsOnly) {
+      writeJsonSafely(PROGRESS_FILE, {
+        version: 1,
+        complete: true,
+        completedAt: new Date().toISOString(),
+        totalProducts: products.length
+      });
+    }
 
     console.log('\n══════════════════════════════════════════════');
     console.log(`  ✅ ${products.length} productos únicos`);
-    console.log(`  🗂️  ${catalog.categories.length} categorías`);
+    console.log(`  🗂️  ${previousCatalog?.categoryCount || catalog.categories.length} categorías`);
     console.log(`  🏷️  ${products.filter(product => product.isPromotion).length} en promoción oficial`);
     console.log(`  💲 ${withDiscount} con precio anterior publicado`);
     console.log(`  📄 ${OUT_FILE}`);
