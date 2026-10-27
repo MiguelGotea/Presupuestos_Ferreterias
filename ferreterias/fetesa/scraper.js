@@ -137,7 +137,8 @@ async function scrapeSource(page, label, startUrl, maxPages = 99) {
   const withDiscount = products.filter(p => p.listPrice > p.price).length;
 
   fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
-  fs.writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: new Date().toISOString(), totalProducts: products.length, withDiscount, products }, null, 2), 'utf8');
+  // JSON minificado — menor tamaño, se parsea igual de rápido en el browser
+  fs.writeFileSync(OUT_FILE, JSON.stringify({ generatedAt: new Date().toISOString(), totalProducts: products.length, withDiscount, products }), 'utf8');
 
   console.log('');
   console.log('══════════════════════════════════════════════');
