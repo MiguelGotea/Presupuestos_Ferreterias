@@ -21,6 +21,10 @@ const PROGRESS_FILE = path.resolve(__dirname, 'data', 'catalog-progress.json');
 // guarda por página, así que es preferible detenerse y reanudar que omitir datos.
 const TIMEOUT = Number(process.env.PRICESMART_TIMEOUT_MS || 180000);
 const NAVIGATION_RETRIES = Number(process.env.PRICESMART_NAVIGATION_RETRIES || 5);
+// Tras DOMContentLoaded, las tarjetas deberían aparecer enseguida. Una página
+// fuera de rango no las tendrá nunca; no hay motivo para esperarla 3 minutos.
+const PRODUCTS_READY_TIMEOUT = Number(process.env.PRICESMART_PRODUCTS_READY_TIMEOUT_MS || 30000);
+const PRODUCTS_PER_PAGE = 12;
 const MAX_CATALOG_PAGES = 500;
 const MAX_PROMOTION_PAGES = 40;
 
@@ -87,7 +91,7 @@ async function visit(page, url, label) {
 }
 
 async function collectPage(page, category = '') {
-  await page.waitForSelector('div[id^="product-card-"]', { timeout: TIMEOUT }).catch(() => {});
+  await page.waitForSelector('div[id^="product-card-"]', { timeout: PRODUCTS_READY_TIMEOUT }).catch(() => {});
 
   return page.$$eval('div[id^="product-card-"]', (cards, currentCategory) => {
     const money = value => {
@@ -174,6 +178,7 @@ async function scrapeCatalog(page) {
     for (let number = firstPage; number <= MAX_CATALOG_PAGES; number++) {
       const url = new URL(category.url);
       url.searchParams.set('page', String(number));
+      console.log(`    → cargando p${number}...`);
       if (!(await visit(page, url.href, `${category.name} p${number}`))) {
         // No avanzar a la página siguiente: impedir un catálogo incompleto.
         saveProgress(categories, all, categoryIndex, number);
@@ -186,6 +191,12 @@ async function scrapeCatalog(page) {
       }
       all.push(...products);
       console.log(`    p${number}: ${products.length} productos (acum ${all.length})`);
+      // El sitio entrega doce tarjetas por página. Una página parcial es la
+      // última de la categoría, por lo que evitamos pedir una página vacía.
+      if (products.length < PRODUCTS_PER_PAGE) {
+        saveProgress(categories, all, categoryIndex + 1, 1);
+        break;
+      }
       saveProgress(categories, all, categoryIndex, number + 1);
     }
   }

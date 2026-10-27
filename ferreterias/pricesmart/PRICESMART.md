@@ -31,7 +31,7 @@ powershell -File .scripts\gitpush.ps1
 
 El descargador recorre automáticamente las categorías y sus páginas públicas, combina las promociones y reemplaza `data/productos.json`. Debe ejecutarse en un equipo local antes de publicar, igual que Fetesa. Una descarga completa puede tardar varios minutos.
 
-Si PriceSmart no responde, cada página tiene un límite de 3 minutos y hasta 5 reintentos. El avance se guarda en `data/catalog-progress.json`; vuelve a ejecutar el mismo comando para reanudar exactamente en la página que falló. El descargador no omite páginas con errores, para no producir un catálogo incompleto.
+Si PriceSmart no responde, la navegación de cada página tiene un límite de 3 minutos y hasta 5 reintentos. Una vez cargada la página, la espera de sus tarjetas es de 30 segundos: así una página inexistente termina la categoría sin quedar bloqueada. El avance se guarda en `data/catalog-progress.json`; vuelve a ejecutar el mismo comando para reanudar exactamente en la página que falló. El descargador no omite páginas con errores, para no producir un catálogo incompleto.
 
 ## Rutas
 
