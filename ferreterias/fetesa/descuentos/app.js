@@ -52,14 +52,13 @@ async function loadData() {
 // ── Filtrar ───────────────────────────────────────────────────────────────────
 function applyFilter(reset = true) {
   if (reset) pageEnd = PAGE_SIZE;
-  const q = userQuery.toLowerCase();
+  const terms = userQuery.toLocaleLowerCase('es').split(/\s+/).filter(Boolean).map(t=>t.normalize('NFD').replace(/[\u0300-\u036f]/g,''));
 
   filtered = discAll.filter(p => {
     if (selectedCats!==null && !selectedCats.has(p.cat||'Sin categoría')) return false;
-    if (!q) return true;
-    return (p.name||'').toLowerCase().includes(q) ||
-           (p.sku||'').toLowerCase().includes(q)   ||
-           (p.cat||'').toLowerCase().includes(q);
+    if (!terms.length) return true;
+    const text = `${p.name||''} ${p.sku||''} ${p.cat||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+    return terms.every(term=>text.includes(term));
   });
 
   // Ordenar

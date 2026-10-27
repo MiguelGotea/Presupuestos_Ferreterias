@@ -114,9 +114,9 @@ function startScan(){
 
 // ── FILTROS Y RENDER ─────────────────────────────────────
 function getFiltered(){
-  const q=userQuery.toLowerCase();
+  const terms=userQuery.toLocaleLowerCase('es').split(/\s+/).filter(Boolean).map(t=>t.normalize('NFD').replace(/[\u0300-\u036f]/g,''));
   let list=discAll.filter(p=>
-    !q||(p.name.toLowerCase().includes(q)||p.brand.toLowerCase().includes(q))
+    !terms.length||terms.every(t=>`${p.name} ${p.brand}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es').includes(t))
   );
 
   if(selectedBrands!==null) list=list.filter(p=>selectedBrands.has(p.brand||'Sin marca'));

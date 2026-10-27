@@ -79,7 +79,12 @@ function renderDiscount(){
   const q = $('#q').value.toLowerCase().trim();
   const sortVal = $('#sort-sel').value;
 
-  filtered = allProducts.filter(p => !q || p.name.toLowerCase().includes(q) || p.cat.toLowerCase().includes(q));
+  const terms=q.normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/\s+/).filter(Boolean);
+  filtered = allProducts.filter(p => {
+    if(!terms.length) return true;
+    const text=`${p.name} ${p.cat}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+    return terms.every(term=>text.includes(term));
+  });
 
   filtered.sort((a,b)=>{
     if(sortVal==='disc')       return pct(b.price,b.regular) - pct(a.price,a.regular);

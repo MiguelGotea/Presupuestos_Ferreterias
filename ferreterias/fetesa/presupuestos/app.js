@@ -47,15 +47,14 @@ async function loadData() {
 // ── Filtrar y ordenar ─────────────────────────────────────────────────────────
 function applyFilter(reset = true) {
   if (reset) { pageEnd = PAGE_SIZE; }
-  const q = query.toLowerCase();
+  const terms = query.toLocaleLowerCase('es').split(/\s+/).filter(Boolean).map(t=>t.normalize('NFD').replace(/[\u0300-\u036f]/g,''));
 
   filtered = allProducts.filter(p => {
     if (showDiscOnly && !(p.listPrice > p.price)) return false;
     if (selectedCats !== null && !selectedCats.has(p.cat || 'Sin categoría')) return false;
-    if (!q) return true;
-    return (p.name||'').toLowerCase().includes(q) ||
-           (p.sku||'').toLowerCase().includes(q)   ||
-           (p.cat||'').toLowerCase().includes(q);
+    if (!terms.length) return true;
+    const text = `${p.name||''} ${p.sku||''} ${p.cat||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+    return terms.every(term=>text.includes(term));
   });
 
   if (sortKey) {

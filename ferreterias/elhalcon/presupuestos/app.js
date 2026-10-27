@@ -65,15 +65,27 @@ async function search(reset=true){
   ctrl?.abort(); ctrl=new AbortController();
   $('#count').textContent='Buscando…';
   try{
-    const offset = (page-1)*PAGE;
-    const url=`${API}?search=${encodeURIComponent(query)}&per_page=${PAGE}&page=${page}`;
-    const r=await fetch(url,{signal:ctrl.signal});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const total = Number(r.headers.get('X-WP-Total') || 0);
-    if(total) lastTotal=total;
-    const j=await r.json();
-    products=products.concat((j||[]).map(norm));
-    totalRecords = lastTotal || products.length;
+    // WooCommerce puede buscar la frase como secuencia exacta; buscar cada
+    // palabra y cruzar localmente los resultados encuentra términos separados.
+    const terms=[...new Set(query.toLocaleLowerCase('es').split(/\s+/).filter(Boolean))];
+    const queries=terms.length>1?terms:[query];
+    const responses=await Promise.all(queries.map(async term=>{
+      const url=`${API}?search=${encodeURIComponent(term)}&per_page=${PAGE}&page=${page}`;
+      const r=await fetch(url,{signal:ctrl.signal});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return {items:await r.json(),total:Number(r.headers.get('X-WP-Total')||0)};
+    }));
+    lastTotal=Math.max(...responses.map(x=>x.total),0);
+    const found=new Map();
+    responses.forEach(x=>x.items.forEach(p=>found.set(String(p.id),p)));
+    const normalized=[...found.values()].map(norm);
+    const normalizedTerms=terms.map(t=>t.normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+    const matches=terms.length>1?normalized.filter(p=>{
+      const text=`${p.name} ${p.sku} ${p.cat}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+      return normalizedTerms.every(term=>text.includes(term));
+    }):normalized;
+    products=products.concat(matches);
+    totalRecords = terms.length>1?lastTotal:(responses[0].total||products.length);
     render();
   }catch(e){
     if(e.name==='AbortError') return;
