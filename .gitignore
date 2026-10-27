@@ -6,7 +6,3 @@ logs/*.log
 *.log
 npm-debug.log*
 
-# Scripts locales de desarrollo (no van al VPS)
-fetesa-local-test.js
-fetesa-scraper-local.js
-package-lock.json

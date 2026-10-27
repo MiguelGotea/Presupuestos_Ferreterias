@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presupuestos Fetesa · Catálogo</title>
+<meta name="description" content="Cotizador de presupuestos con catálogo oficial de Fetesa Do It Center.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="shortcut icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <a href="/" class="header-link" style="padding:6px 10px;">← Ferreterías</a>
+  <div class="logo">🔴 Fetesa <span>Presupuestos</span></div>
+  <input id="q" type="search" placeholder="Buscar producto, SKU o categoría…" autofocus>
+  <span class="update-badge" id="last-update"></span>
+  <a href="/ferreterias/fetesa/descuentos/" target="_blank" class="header-link">🏷️ Ver promociones</a>
+</header>
+
+<main>
+
+  <!-- RESULTADOS -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Resultados <span class="meta" id="count"></span></h2>
+      <button id="toggle-disc"><span class="dot"></span>🏷️ Solo con descuento</button>
+    </div>
+    <div id="results"><div class="empty">Cargando catálogo…</div></div>
+    <button id="more" class="btn btn-sec" hidden>Cargar más resultados</button>
+  </section>
+
+  <!-- PRESUPUESTO -->
+  <aside class="panel" id="budget-panel">
+    <div class="panel-head">
+      <h2>🧾 Presupuesto <span class="meta" id="nitems">0 ítems</span></h2>
+      <button class="btn btn-sec btn-sm" id="clear" title="Vaciar presupuesto">🗑 Vaciar</button>
+    </div>
+    <div id="budget"><div class="empty">Añade productos con "+".</div></div>
+    <div class="budget-total-bar">
+      <span class="label">Total</span>
+      <span class="amount" id="total">C$0.00</span>
+    </div>
+    <div class="budget-actions">
+      <button class="btn btn-print" id="print">🖨 Imprimir Presupuesto</button>
+    </div>
+  </aside>
+
+</main>
+
+<div id="modal"><div class="modal-box" id="mbox"></div></div>
+
+<div id="col-filter-popover" class="col-filter-popover">
+  <div class="popover-head">
+    <span id="popover-title">Filtrar</span>
+    <button type="button" id="popover-close" class="popover-close-btn" title="Cerrar">&times;</button>
+  </div>
+  <div class="popover-quick">
+    <button type="button" id="popover-all" class="popover-link-btn">Todas</button>
+    <span class="popover-sep">|</span>
+    <button type="button" id="popover-none" class="popover-link-btn">Ninguna</button>
+    <span class="popover-sep">|</span>
+    <button type="button" id="popover-reset" class="popover-link-btn">Restablecer</button>
+  </div>
+  <div class="popover-search-wrap">
+    <input type="text" id="popover-search" placeholder="Buscar opción…" autocomplete="off">
+  </div>
+  <div class="popover-list" id="popover-list"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
+

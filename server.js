@@ -26,6 +26,8 @@ const REDIRECTS = {
   '/ferreterias/sinsa/sinsa-descuentos.html':   '/ferreterias/sinsa/descuentos/',
   '/ferreterias/sinsa/presupuestos':            '/ferreterias/sinsa/presupuestos/',
   '/ferreterias/sinsa/descuentos':              '/ferreterias/sinsa/descuentos/',
+  '/ferreterias/fetesa/presupuestos':           '/ferreterias/fetesa/presupuestos/',
+  '/ferreterias/fetesa/descuentos':             '/ferreterias/fetesa/descuentos/',
 };
 
 // ── Alias específicos de rutas estáticas ────────────────────────────────────
@@ -112,8 +114,10 @@ http.createServer((req, res) => {
   console.log('');
   console.log('  🏗️  Presupuestos Ferreterías — servidor listo');
   console.log('  ─────────────────────────────────────────────');
-  console.log('  Landing:            http://localhost:' + PORT + '/');
-  console.log('  Sinsa presupuestos: http://localhost:' + PORT + '/ferreterias/sinsa/presupuestos/');
-  console.log('  Sinsa descuentos:   http://localhost:' + PORT + '/ferreterias/sinsa/descuentos/');
+  console.log('  Landing:               http://localhost:' + PORT + '/');
+  console.log('  Sinsa presupuestos:    http://localhost:' + PORT + '/ferreterias/sinsa/presupuestos/');
+  console.log('  Sinsa descuentos:      http://localhost:' + PORT + '/ferreterias/sinsa/descuentos/');
+  console.log('  Fetesa presupuestos:   http://localhost:' + PORT + '/ferreterias/fetesa/presupuestos/');
+  console.log('  Fetesa descuentos:     http://localhost:' + PORT + '/ferreterias/fetesa/descuentos/');
   console.log('');
 });

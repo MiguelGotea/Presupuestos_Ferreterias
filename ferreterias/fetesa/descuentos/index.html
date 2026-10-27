@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promociones Fetesa · Descuentos</title>
+<meta name="description" content="Productos con descuento y promociones del catálogo oficial de Fetesa Do It Center.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="shortcut icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <a href="/" class="header-link" style="padding:6px 10px;">← Ferreterías</a>
+  <div class="logo">🏷️ Fetesa <span>Descuentos</span></div>
+  <input id="q" type="search" placeholder="Buscar en promociones…">
+  <span class="update-badge" id="last-update"></span>
+  <a href="/ferreterias/fetesa/presupuestos/" class="header-link">📋 Ver catálogo</a>
+</header>
+
+<div class="stats-bar">
+  <div class="stat-box">
+    <span class="stat-val" id="stat-total">—</span>
+    <span class="stat-lbl">Con descuento</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-val" id="stat-max">—</span>
+    <span class="stat-lbl">Máximo %</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-val" id="stat-avg">—</span>
+    <span class="stat-lbl">Promedio %</span>
+  </div>
+  <div class="stats-controls">
+    <span class="sort-label">Ordenar:</span>
+    <select id="sort-sel">
+      <option value="disc">Mayor descuento %</option>
+      <option value="saving">Mayor ahorro C$</option>
+      <option value="price-asc">Precio menor</option>
+      <option value="price-desc">Precio mayor</option>
+    </select>
+    <span class="filter-count" id="filter-count"></span>
+  </div>
+</div>
+
+<main>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>🏷️ Productos con Descuento</h2>
+    </div>
+    <div id="results"><div class="empty">Cargando promociones…</div></div>
+    <button id="more" class="btn btn-sec" hidden>Cargar más resultados</button>
+  </section>
+</main>
+
+<div id="modal"><div class="modal-box" id="mbox"></div></div>
+
+<div id="col-filter-popover" class="col-filter-popover">
+  <div class="popover-head">
+    <span id="popover-title">Filtrar</span>
+    <button type="button" id="popover-close" class="popover-close-btn" title="Cerrar">&times;</button>
+  </div>
+  <div class="popover-quick">
+    <button type="button" id="popover-all" class="popover-link-btn">Todas</button>
+    <span class="popover-sep">|</span>
+    <button type="button" id="popover-none" class="popover-link-btn">Ninguna</button>
+    <span class="popover-sep">|</span>
+    <button type="button" id="popover-reset" class="popover-link-btn">Restablecer</button>
+  </div>
+  <div class="popover-search-wrap">
+    <input type="text" id="popover-search" placeholder="Buscar opción…" autocomplete="off">
+  </div>
+  <div class="popover-list" id="popover-list"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
+

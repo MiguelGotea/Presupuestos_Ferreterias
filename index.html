@@ -54,6 +54,13 @@
       --sinsa-green-light: #ebf8e9;
       --sinsa-green-border: #bce5b5;
 
+      /* Identidad Fetesa */
+      --fetesa-red: #c0392b;
+      --fetesa-red-dark: #a93226;
+      --fetesa-red-light: #fdf0ef;
+      --fetesa-red-border: #f0b8b4;
+      --shadow-fetesa: 0 6px 20px rgba(192, 57, 43, 0.22);
+
       --radius-sm: 8px;
       --radius-md: 14px;
       --radius-lg: 20px;
@@ -439,6 +446,48 @@
       color: #ffffff;
     }
 
+    /* FETESA brand badge */
+    .fetesa-brand-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--fetesa-red), var(--fetesa-red-dark));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 900;
+      color: #ffffff;
+      letter-spacing: -1px;
+      box-shadow: 0 2px 8px rgba(192,57,43,0.30);
+      flex-shrink: 0;
+    }
+
+    .card.card-fetesa {
+      border-color: var(--fetesa-red-border);
+    }
+
+    .card.card-fetesa:hover {
+      border-color: var(--fetesa-red);
+      box-shadow: var(--shadow-fetesa);
+    }
+
+    .card.card-fetesa:hover .action-circle {
+      background: var(--fetesa-red);
+      border-color: var(--fetesa-red);
+      color: #ffffff;
+    }
+
+    .card-provider.fetesa {
+      color: var(--fetesa-red);
+    }
+
+    .status-pill.local {
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+
     /* ESTADO PRÓXIMAMENTE */
     .card.soon {
       background: #faf8f5;
@@ -551,7 +600,7 @@
     <div class="section-header">
       <div class="section-title-group">
         <span class="section-title">Módulos Disponibles</span>
-        <span class="count-badge" id="card-counter">2 Activos</span>
+        <span class="count-badge" id="card-counter">4 Activos</span>
       </div>
     </div>
 
@@ -613,6 +662,58 @@
         </div>
       </a>
 
+      <!-- FETESA: PRESUPUESTOS -->
+      <a class="card card-fetesa" href="/ferreterias/fetesa/presupuestos/" id="card-fetesa-presupuestos"
+        data-title="fetesa presupuestos cotizador precios catalogo ferreteria"
+        data-provider="fetesa">
+        <div class="card-top">
+          <div class="fetesa-brand-badge" title="Ferretería Fetesa">F</div>
+          <span class="status-pill local">Catálogo Local</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider fetesa">Fetesa · Catálogo Principal</div>
+          <h2>Cotizador de Presupuestos</h2>
+          <p>Consulta el catálogo completo de Fetesa, busca productos por nombre o categoría y genera presupuestos con precios actualizados desde la última descarga.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag">Catálogo Completo</span>
+            <span class="tag">Presupuestos</span>
+            <span class="tag">Exportar</span>
+          </div>
+          <div class="card-action-btn">
+            <span>Abrir</span>
+            <div class="action-circle">→</div>
+          </div>
+        </div>
+      </a>
+
+      <!-- FETESA: DESCUENTOS Y PROMOCIONES -->
+      <a class="card card-fetesa" href="/ferreterias/fetesa/descuentos/" id="card-fetesa-descuentos"
+        data-title="fetesa descuentos promociones ofertas rebaja precio lista"
+        data-provider="fetesa">
+        <div class="card-top">
+          <div class="fetesa-brand-badge" title="Ferretería Fetesa">F</div>
+          <span class="status-pill local">Catálogo Local</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider fetesa">Fetesa · Ofertas &amp; Promociones</div>
+          <h2>Descuentos y Promociones</h2>
+          <p>Visualiza únicamente los productos de Fetesa que tienen precio de lista mayor al precio actual, identificando promociones y rebajas vigentes.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag promo">% Descuentos</span>
+            <span class="tag">Promociones</span>
+            <span class="tag">Precio Lista</span>
+          </div>
+          <div class="card-action-btn">
+            <span>Ver Ofertas</span>
+            <div class="action-circle">→</div>
+          </div>
+        </div>
+      </a>
+
       <!-- PRÓXIMA FERRETERÍA: PROVEEDORES DE ACERO Y ESTRUCTURA -->
       <div class="card soon" id="card-pesados" data-title="acero materiales pesados estructural hierro proximamente">
         <div class="card-top">
@@ -653,6 +754,10 @@
         <a href="/ferreterias/sinsa/presupuestos/" class="footer-link">Sinsa Presupuestos</a>
         <span>·</span>
         <a href="/ferreterias/sinsa/descuentos/" class="footer-link">Sinsa Descuentos</a>
+        <span>·</span>
+        <a href="/ferreterias/fetesa/presupuestos/" class="footer-link">Fetesa Presupuestos</a>
+        <span>·</span>
+        <a href="/ferreterias/fetesa/descuentos/" class="footer-link">Fetesa Descuentos</a>
       </div>
     </div>
   </footer>
@@ -679,7 +784,7 @@
       noResults.style.display   = visibleCount === 0 ? 'block' : 'none';
       cardCounter.textContent   = query
         ? visibleCount + (visibleCount === 1 ? ' resultado' : ' resultados')
-        : '2 Activos';
+        : '4 Activos';
     }
 
     filterInput.addEventListener('input', applyFilter);
