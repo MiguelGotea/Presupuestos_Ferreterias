@@ -535,6 +535,26 @@
       color: var(--halcon-blue);
     }
 
+    /* PRICESMART */
+    .pricesmart-brand-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #142b62;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 900;
+      box-shadow: 0 3px 10px rgba(20,43,98,.28);
+    }
+
+    .card.card-pricesmart { border-color: #b8c7ed; }
+    .card.card-pricesmart:hover { border-color: #2449a5; box-shadow: 0 8px 28px rgba(20,43,98,.16); }
+    .card.card-pricesmart:hover .action-circle { background: #2449a5; border-color: #2449a5; color: #fff; }
+    .card-provider.pricesmart { color: #2449a5; }
+
     /* ESTADO PRÓXIMAMENTE */
     .card.soon {
       background: #faf8f5;
@@ -647,7 +667,7 @@
     <div class="section-header">
       <div class="section-title-group">
         <span class="section-title">Módulos Disponibles</span>
-        <span class="count-badge" id="card-counter">6 Activos</span>
+        <span class="count-badge" id="card-counter">8 Activos</span>
       </div>
     </div>
 
@@ -678,6 +698,42 @@
             <span>Abrir</span>
             <div class="action-circle">→</div>
           </div>
+        </div>
+      </a>
+
+      <!-- PRICESMART: PRESUPUESTOS -->
+      <a class="card card-pricesmart" href="/ferreterias/pricesmart/presupuestos/" id="card-pricesmart-presupuestos"
+        data-title="pricesmart presupuestos cotizador catalogo promociones ahorros fabricante">
+        <div class="card-top">
+          <div class="pricesmart-brand-badge" title="PriceSmart Nicaragua">PS</div>
+          <span class="status-pill local">Catálogo Local</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider pricesmart">PriceSmart · Catálogo publicado</div>
+          <h2>Cotizador de Presupuestos</h2>
+          <p>Consulta los productos publicados desde PriceSmart, busca por nombre o categoría y arma un presupuesto con los precios de la última descarga local.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags"><span class="tag">Catálogo Local</span><span class="tag">Presupuestos</span><span class="tag">Actualizable</span></div>
+          <div class="card-action-btn"><span>Abrir</span><div class="action-circle">→</div></div>
+        </div>
+      </a>
+
+      <!-- PRICESMART: AHORROS DEL FABRICANTE -->
+      <a class="card card-pricesmart" href="/ferreterias/pricesmart/descuentos/" id="card-pricesmart-descuentos"
+        data-title="pricesmart descuentos promociones ofertas ahorros fabricante precio lista">
+        <div class="card-top">
+          <div class="pricesmart-brand-badge" title="PriceSmart Nicaragua">PS</div>
+          <span class="status-pill local">Catálogo Local</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider pricesmart">PriceSmart · Ahorros del Fabricante</div>
+          <h2>Descuentos y Promociones</h2>
+          <p>Revisa los productos publicados en “Ahorros del Fabricante”; muestra precio actual, y precio anterior y ahorro cuando PriceSmart los expone.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags"><span class="tag promo">% Descuentos</span><span class="tag">Campaña Oficial</span><span class="tag">Promociones</span></div>
+          <div class="card-action-btn"><span>Ver Ofertas</span><div class="action-circle">→</div></div>
         </div>
       </a>
 
@@ -861,6 +917,10 @@
         <a href="/ferreterias/elhalcon/presupuestos/" class="footer-link">El Halcón Presupuestos</a>
         <span>·</span>
         <a href="/ferreterias/elhalcon/descuentos/" class="footer-link">El Halcón Descuentos</a>
+        <span>·</span>
+        <a href="/ferreterias/pricesmart/presupuestos/" class="footer-link">PriceSmart Presupuestos</a>
+        <span>·</span>
+        <a href="/ferreterias/pricesmart/descuentos/" class="footer-link">PriceSmart Descuentos</a>
       </div>
     </div>
   </footer>
@@ -887,7 +947,7 @@
       noResults.style.display   = visibleCount === 0 ? 'block' : 'none';
       cardCounter.textContent   = query
         ? visibleCount + (visibleCount === 1 ? ' resultado' : ' resultados')
-        : '6 Activos';
+        : '8 Activos';
     }
 
     filterInput.addEventListener('input', applyFilter);

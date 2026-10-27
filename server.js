@@ -30,6 +30,8 @@ const REDIRECTS = {
   '/ferreterias/fetesa/descuentos':             '/ferreterias/fetesa/descuentos/',
   '/ferreterias/elhalcon/presupuestos':         '/ferreterias/elhalcon/presupuestos/',
   '/ferreterias/elhalcon/descuentos':           '/ferreterias/elhalcon/descuentos/',
+  '/ferreterias/pricesmart/presupuestos':       '/ferreterias/pricesmart/presupuestos/',
+  '/ferreterias/pricesmart/descuentos':         '/ferreterias/pricesmart/descuentos/',
 };
 
 // ── Alias específicos de rutas estáticas ────────────────────────────────────
@@ -156,5 +158,7 @@ http.createServer((req, res) => {
   console.log('  Fetesa descuentos:     http://localhost:' + PORT + '/ferreterias/fetesa/descuentos/');
   console.log('  El Halcón presup.:     http://localhost:' + PORT + '/ferreterias/elhalcon/presupuestos/');
   console.log('  El Halcón descuentos:  http://localhost:' + PORT + '/ferreterias/elhalcon/descuentos/');
+  console.log('  PriceSmart presup.:    http://localhost:' + PORT + '/ferreterias/pricesmart/presupuestos/');
+  console.log('  PriceSmart descuentos: http://localhost:' + PORT + '/ferreterias/pricesmart/descuentos/');
   console.log('');
 });
