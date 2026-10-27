@@ -35,15 +35,32 @@ function readProgress() {
   }
 }
 
-function writeJsonAtomically(file, data) {
-  const temporary = `${file}.tmp`;
+function waitSync(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function writeJsonSafely(file, data) {
+  const payload = JSON.stringify(data);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(temporary, JSON.stringify(data), 'utf8');
-  fs.renameSync(temporary, file);
+  let lastError;
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    try {
+      // Escritura directa: evita EPERM de Windows al reemplazar un archivo
+      // que Explorer, Git o el antivirus puede estar leyendo brevemente.
+      fs.writeFileSync(file, payload, 'utf8');
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || attempt === 10) throw error;
+      console.log(`    ⚠️ Checkpoint bloqueado por Windows; reintentando ${attempt}/10...`);
+      waitSync(1000 * attempt);
+    }
+  }
+  throw lastError;
 }
 
 function saveProgress(categories, products, categoryIndex, pageNumber) {
-  writeJsonAtomically(PROGRESS_FILE, {
+  writeJsonSafely(PROGRESS_FILE, {
     version: 1,
     updatedAt: new Date().toISOString(),
     categories,
@@ -237,7 +254,7 @@ async function scrapePromotions(page) {
     const products = [...byId.values()];
     const withDiscount = products.filter(product => product.listPrice > product.price).length;
 
-    writeJsonAtomically(OUT_FILE, {
+    writeJsonSafely(OUT_FILE, {
       generatedAt: new Date().toISOString(),
       source: HOME_URL,
       promotionsSource: PROMOTIONS_URL,
@@ -247,7 +264,7 @@ async function scrapePromotions(page) {
       withDiscount,
       products
     });
-    writeJsonAtomically(PROGRESS_FILE, {
+    writeJsonSafely(PROGRESS_FILE, {
       version: 1,
       complete: true,
       completedAt: new Date().toISOString(),
