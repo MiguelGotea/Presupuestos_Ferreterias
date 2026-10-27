@@ -61,6 +61,13 @@
       --fetesa-red-border: #f0b8b4;
       --shadow-fetesa: 0 6px 20px rgba(192, 57, 43, 0.22);
 
+      /* Identidad El Halcón */
+      --halcon-blue: #003087;
+      --halcon-blue-dark: #001f6b;
+      --halcon-blue-light: #e8eef8;
+      --halcon-blue-border: #b8ccf0;
+      --shadow-halcon: 0 6px 20px rgba(0, 48, 135, 0.22);
+
       --radius-sm: 8px;
       --radius-md: 14px;
       --radius-lg: 20px;
@@ -488,6 +495,46 @@
       border: 1px solid #bfdbfe;
     }
 
+    /* EL HALCÓN brand badge */
+    .halcon-brand-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(145deg, #0055d4 0%, #001f6b 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: var(--shadow-halcon);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      flex-shrink: 0;
+      transition: var(--transition);
+    }
+
+    .card.card-halcon {
+      border-color: var(--halcon-blue-border);
+    }
+
+    .card.card-halcon:hover {
+      border-color: var(--halcon-blue);
+      box-shadow: var(--shadow-halcon);
+    }
+
+    .card.card-halcon:hover .halcon-brand-badge {
+      transform: scale(1.04);
+      box-shadow: 0 8px 24px rgba(0, 48, 135, 0.38);
+    }
+
+    .card.card-halcon:hover .action-circle {
+      background: var(--halcon-blue);
+      border-color: var(--halcon-blue);
+      color: #ffffff;
+    }
+
+    .card-provider.halcon {
+      color: var(--halcon-blue);
+    }
+
     /* ESTADO PRÓXIMAMENTE */
     .card.soon {
       background: #faf8f5;
@@ -600,7 +647,7 @@
     <div class="section-header">
       <div class="section-title-group">
         <span class="section-title">Módulos Disponibles</span>
-        <span class="count-badge" id="card-counter">4 Activos</span>
+        <span class="count-badge" id="card-counter">6 Activos</span>
       </div>
     </div>
 
@@ -714,6 +761,58 @@
         </div>
       </a>
 
+      <!-- EL HALCÓN: PRESUPUESTOS -->
+      <a class="card card-halcon" href="/ferreterias/elhalcon/presupuestos/" id="card-halcon-presupuestos"
+        data-title="el halcon presupuestos cotizador precios en vivo materiales woocommerce"
+        data-provider="halcon">
+        <div class="card-top">
+          <div class="halcon-brand-badge" title="Ferretería El Halcón">🦅</div>
+          <span class="status-pill active">En Línea</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider halcon">El Halcón · Catálogo Principal</div>
+          <h2>Cotizador de Presupuestos</h2>
+          <p>Busca materiales y productos de construcción con precios en vivo vía API WooCommerce. Permite crear canastas de presupuesto y calcular totales al instante.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag">Precios en Vivo</span>
+            <span class="tag">Presupuestos</span>
+            <span class="tag">API Directa</span>
+          </div>
+          <div class="card-action-btn">
+            <span>Abrir</span>
+            <div class="action-circle">→</div>
+          </div>
+        </div>
+      </a>
+
+      <!-- EL HALCÓN: PROMOCIONES Y DESCUENTOS -->
+      <a class="card card-halcon" href="/ferreterias/elhalcon/descuentos/" id="card-halcon-descuentos"
+        data-title="el halcon descuentos promociones ofertas rebajas precio sale"
+        data-provider="halcon">
+        <div class="card-top">
+          <div class="halcon-brand-badge" title="Ferretería El Halcón">🦅</div>
+          <span class="status-pill active">En Línea</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider halcon">El Halcón · Ofertas &amp; Promociones</div>
+          <h2>Descuentos y Promociones</h2>
+          <p>Explora todos los productos en oferta del catálogo de El Halcón. Filtra por mayor descuento, mayor ahorro en córdobas o por categoría de producto.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags">
+            <span class="tag promo">% Descuentos</span>
+            <span class="tag">Promociones</span>
+            <span class="tag">En Vivo</span>
+          </div>
+          <div class="card-action-btn">
+            <span>Ver Ofertas</span>
+            <div class="action-circle">→</div>
+          </div>
+        </div>
+      </a>
+
       <!-- PRÓXIMA FERRETERÍA: PROVEEDORES DE ACERO Y ESTRUCTURA -->
       <div class="card soon" id="card-pesados" data-title="acero materiales pesados estructural hierro proximamente">
         <div class="card-top">
@@ -758,6 +857,10 @@
         <a href="/ferreterias/fetesa/presupuestos/" class="footer-link">Fetesa Presupuestos</a>
         <span>·</span>
         <a href="/ferreterias/fetesa/descuentos/" class="footer-link">Fetesa Descuentos</a>
+        <span>·</span>
+        <a href="/ferreterias/elhalcon/presupuestos/" class="footer-link">El Halcón Presupuestos</a>
+        <span>·</span>
+        <a href="/ferreterias/elhalcon/descuentos/" class="footer-link">El Halcón Descuentos</a>
       </div>
     </div>
   </footer>
@@ -784,7 +887,7 @@
       noResults.style.display   = visibleCount === 0 ? 'block' : 'none';
       cardCounter.textContent   = query
         ? visibleCount + (visibleCount === 1 ? ' resultado' : ' resultados')
-        : '4 Activos';
+        : '6 Activos';
     }
 
     filterInput.addEventListener('input', applyFilter);
