@@ -152,3 +152,4 @@ ferreterias/fetesa/
 
 > [!WARNING]
 > No abras `fetesa.com.ni` en el navegador mientras el scraper está corriendo — puede interferir con la sesión de Puppeteer.
+
