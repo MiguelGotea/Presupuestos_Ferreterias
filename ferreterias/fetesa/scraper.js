@@ -3,8 +3,8 @@
  * ferreterias/fetesa/scraper.js — Descargador completo del catálogo Fetesa
  *
  * Ejecutar desde la raíz del proyecto:
- *   node ferreterias/fetesa/scraper.js            → descarga por categorías
- *   node ferreterias/fetesa/scraper.js martillo   → solo búsqueda
+ *   node ferreterias/fetesa/scraper.js            → descarga catálogo completo (sin límite)
+ *   node ferreterias/fetesa/scraper.js martillo   → solo búsqueda por término
  *   node ferreterias/fetesa/scraper.js martillo 3 → búsqueda, máx 3 páginas
  *
  * Guarda: ferreterias/fetesa/data/productos.json
@@ -106,7 +106,8 @@ async function scrapeSource(page, label, startUrl, maxPages = 99) {
 (async () => {
   const args = process.argv.slice(2);
   const query = args[0] || null;
-  const maxPages = parseInt(args[1] || '99');
+  // Sin límite por defecto — descarga todas las páginas disponibles
+  const maxPages = parseInt(args[1] || '99999');
 
   console.log('');
   console.log('══════════════════════════════════════════════');
