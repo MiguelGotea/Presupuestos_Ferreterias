@@ -1,0 +1,75 @@
+:root{
+  --g:#003087;--g2:#0055d4;--gl:#e8eef8;--gl2:#d0dcf4;
+  --o:#e67e22;--od:#d35400;--ob:#fef3e8;
+  --r:#c0392b;--rb:#fdecea;
+  --bd:#dde3ef;--bg:#f0f2f8;--card:#fff;
+  --tx:#0d1a36;--mu:#4a5a80;--light:#7a8fb0;
+  --shadow:0 2px 12px rgba(0,0,48,.07);--radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.5 'Inter',system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+
+/* HEADER */
+header{
+  background:linear-gradient(135deg,#001f6b,#0055d4);
+  padding:14px 20px;display:flex;gap:14px;align-items:center;
+  position:sticky;top:0;z-index:10;
+  box-shadow:0 2px 16px rgba(0,31,107,.35)
+}
+.logo{font-size:20px;font-weight:700;color:#fff;white-space:nowrap}
+.logo span{opacity:.75;font-weight:400;font-size:13px}
+.search-wrap{flex:1;display:flex;gap:10px;align-items:center}
+#q{
+  flex:1;padding:10px 16px;border:0;border-radius:999px;
+  font:14px 'Inter',sans-serif;outline:none;
+  background:rgba(255,255,255,.2);color:#fff;transition:background .2s
+}
+#q::placeholder{color:rgba(255,255,255,.65)}
+#q:focus{background:rgba(255,255,255,.3)}
+.back-link{color:rgba(255,255,255,.85);font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.35);transition:background .2s}
+.back-link:hover{background:rgba(255,255,255,.2)}
+
+/* STATS BAR */
+.stats-bar{background:#eef2fa;border-bottom:1px solid #d0dcf4;padding:10px 20px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.stat-item{display:flex;flex-direction:column;align-items:center}
+.stat-val{font-size:20px;font-weight:800;color:var(--g)}
+.stat-label{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px}
+.loading-bar{flex:1;height:4px;background:#d0dcf4;border-radius:99px;overflow:hidden}
+.loading-fill{height:100%;background:var(--g2);border-radius:99px;transition:width .4s;width:0%}
+#status-msg{font-size:12px;color:var(--g);font-weight:500;flex:1;text-align:right}
+
+/* PANEL */
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin:16px 20px}
+
+/* FILTER BAR */
+.filter-bar{padding:10px 14px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--bd);background:#f5f7fc;flex-wrap:wrap}
+.filter-bar label{font-size:12px;font-weight:600;color:var(--mu)}
+#sort-sel{padding:6px 10px;border:1px solid var(--bd);border-radius:8px;font:12px 'Inter',sans-serif;background:#fff;cursor:pointer}
+.filter-count{font-size:12px;color:var(--mu);margin-left:auto}
+
+/* TABLE */
+table{width:100%;border-collapse:collapse}
+th{font-size:10px;text-transform:uppercase;color:var(--light);font-weight:600;text-align:left;padding:8px 12px;border-bottom:1px solid var(--bd);background:#f5f7fc;user-select:none;white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid #edf0f8;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tr:hover td{background:#f8faff}
+td.img-cell{width:58px;padding:6px 8px}
+td.img-cell img{width:46px;height:46px;object-fit:contain;border-radius:7px;border:1px solid var(--bd);background:#fff;cursor:zoom-in;display:block}
+.name{font-weight:600;font-size:13px;line-height:1.3}
+.sub{font-size:11px;color:var(--mu);margin-top:2px}
+.sku-badge{display:inline-block;background:#e8eef8;color:#003087;font-size:10px;font-weight:700;border-radius:5px;padding:2px 6px;border:1px solid #b8ccf0;white-space:nowrap}
+.price-col{font-weight:700;color:var(--g);white-space:nowrap;text-align:right}
+.list-col{font-size:11px;color:var(--light);text-decoration:line-through;white-space:nowrap;text-align:right}
+.saving-col{font-weight:700;color:#d35400;white-space:nowrap;text-align:right}
+.badge-disc{display:inline-block;background:var(--o);color:#fff;font-size:12px;font-weight:800;border-radius:8px;padding:4px 8px;white-space:nowrap}
+
+/* BUTTONS */
+.btn{border:0;border-radius:8px;padding:7px 12px;cursor:pointer;font:12px/1 'Inter',sans-serif;font-weight:600;transition:filter .15s,transform .1s}
+.btn:hover{filter:brightness(.92);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn-sec{background:#fff;color:var(--tx);border:1px solid var(--bd)}
+.btn-disc{background:var(--o);color:#fff}
+.empty{padding:40px 20px;text-align:center;color:var(--mu);font-size:14px}
+
+a{color:var(--g);text-decoration:none}
+a:hover{text-decoration:underline}

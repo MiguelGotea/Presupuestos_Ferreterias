@@ -28,6 +28,8 @@ const REDIRECTS = {
   '/ferreterias/sinsa/descuentos':              '/ferreterias/sinsa/descuentos/',
   '/ferreterias/fetesa/presupuestos':           '/ferreterias/fetesa/presupuestos/',
   '/ferreterias/fetesa/descuentos':             '/ferreterias/fetesa/descuentos/',
+  '/ferreterias/elhalcon/presupuestos':         '/ferreterias/elhalcon/presupuestos/',
+  '/ferreterias/elhalcon/descuentos':           '/ferreterias/elhalcon/descuentos/',
 };
 
 // ── Alias específicos de rutas estáticas ────────────────────────────────────
@@ -67,6 +69,39 @@ http.createServer((req, res) => {
           'content-type': up.headers['content-type'] || 'application/json',
           'access-control-allow-origin': '*'
         });
+        up.pipe(res);
+      }
+    );
+    proxy.on('error', (e) => {
+      res.writeHead(502);
+      res.end(JSON.stringify({ error: e.message }));
+    });
+    proxy.end();
+    return;
+  }
+
+  // ── Proxy API El Halcón (/api/elhalcon/*) ─────────────────────────────────
+  if (pathname.startsWith('/api/elhalcon/')) {
+    const apiPath = pathname.replace('/api/elhalcon', '');
+    const proxy = https.request(
+      {
+        host: 'elhalcon.com.ni',
+        path: apiPath + (url.search || ''),
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'user-agent': 'Mozilla/5.0 presupuestos-ferreterias'
+        }
+      },
+      (up) => {
+        // Reenviar también X-WP-Total para la paginación
+        const headers = {
+          'content-type': up.headers['content-type'] || 'application/json',
+          'access-control-allow-origin': '*'
+        };
+        if (up.headers['x-wp-total'])       headers['x-wp-total']        = up.headers['x-wp-total'];
+        if (up.headers['x-wp-totalpages'])   headers['x-wp-totalpages']   = up.headers['x-wp-totalpages'];
+        res.writeHead(up.statusCode, headers);
         up.pipe(res);
       }
     );
@@ -119,5 +154,7 @@ http.createServer((req, res) => {
   console.log('  Sinsa descuentos:      http://localhost:' + PORT + '/ferreterias/sinsa/descuentos/');
   console.log('  Fetesa presupuestos:   http://localhost:' + PORT + '/ferreterias/fetesa/presupuestos/');
   console.log('  Fetesa descuentos:     http://localhost:' + PORT + '/ferreterias/fetesa/descuentos/');
+  console.log('  El Halcón presup.:     http://localhost:' + PORT + '/ferreterias/elhalcon/presupuestos/');
+  console.log('  El Halcón descuentos:  http://localhost:' + PORT + '/ferreterias/elhalcon/descuentos/');
   console.log('');
 });
