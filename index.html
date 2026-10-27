@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 
 <head>
@@ -34,7 +34,7 @@
       --bg-alt: #f4efe8;
       --card-bg: #ffffff;
       --card-hover: #fdfcf9;
-      
+
       --border: #e8e2d8;
       --border-subtle: #f0ebe2;
       --border-focus: #c4622d;
@@ -54,12 +54,6 @@
       --sinsa-green-light: #ebf8e9;
       --sinsa-green-border: #bce5b5;
 
-      /* Identidad Fetesa */
-      --fetesa-red: #c0392b;
-      --fetesa-red-dark: #8e1a12;
-      --fetesa-red-light: #fdecea;
-      --fetesa-red-border: #f5c6c6;
-
       --radius-sm: 8px;
       --radius-md: 14px;
       --radius-lg: 20px;
@@ -73,9 +67,7 @@
       --transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    *,
-    *::before,
-    *::after {
+    *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
@@ -91,7 +83,7 @@
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      background-image: 
+      background-image:
         radial-gradient(ellipse 90% 60% at 50% -10%, #f3ece0 0%, transparent 75%),
         radial-gradient(circle at 10% 90%, #f7f1e7 0%, transparent 40%);
     }
@@ -165,9 +157,7 @@
       transition: var(--transition);
     }
 
-    .search-input::placeholder {
-      color: var(--tx-muted);
-    }
+    .search-input::placeholder { color: var(--tx-muted); }
 
     .search-input:focus {
       border-color: var(--warm-accent);
@@ -187,9 +177,7 @@
       line-height: 1;
     }
 
-    .search-clear:hover {
-      color: var(--tx-main);
-    }
+    .search-clear:hover { color: var(--tx-main); }
 
     /* ── SECCIÓN DE FERRETERÍAS ─────────── */
     .content-wrap {
@@ -263,11 +251,7 @@
       box-shadow: var(--shadow-hover);
     }
 
-    /* Tarjetas Sinsa Específicas */
-    .card.card-sinsa {
-      border-color: var(--border);
-    }
-
+    /* Tarjetas Sinsa */
     .card.card-sinsa:hover {
       border-color: rgba(69, 168, 52, 0.45);
       box-shadow: 0 16px 36px -6px rgba(50, 110, 40, 0.12), 0 0 0 1px rgba(69, 168, 52, 0.2);
@@ -280,7 +264,7 @@
       gap: 14px;
     }
 
-    /* ÍCONO / LOGO SINSA CON FONDO VERDE */
+    /* ÍCONO / LOGO SINSA */
     .sinsa-brand-badge {
       background: var(--sinsa-green);
       background-image: linear-gradient(145deg, #48b136 0%, #3e982d 100%);
@@ -308,42 +292,7 @@
       box-shadow: 0 8px 24px rgba(69, 168, 52, 0.35);
     }
 
-    /* FETESA brand badge */
-    .fetesa-brand-badge {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #8e1a12, #c0392b);
-      border: 1.5px solid var(--fetesa-red-border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      font-weight: 900;
-      color: #fff;
-      flex-shrink: 0;
-      transition: transform 0.22s, box-shadow 0.22s;
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-      letter-spacing: -1px;
-    }
-
-    .card:hover .fetesa-brand-badge {
-      transform: scale(1.04);
-      box-shadow: 0 8px 24px rgba(192, 57, 43, 0.35);
-    }
-
-    .card-provider.fetesa {
-      color: var(--fetesa-red-dark);
-    }
-
-    .card.card-fetesa:hover .action-circle {
-      background: var(--fetesa-red);
-      border-color: var(--fetesa-red);
-      color: #ffffff;
-    }
-
-
-    /* ÍCONOS PARA OTRAS FERRETERÍAS / PLACEHOLDERS */
+    /* ÍCONOS GENÉRICOS */
     .generic-badge {
       width: 48px;
       height: 48px;
@@ -390,9 +339,7 @@
     }
 
     /* CUERPO DE LA TARJETA */
-    .card-body {
-      flex: 1;
-    }
+    .card-body { flex: 1; }
 
     .card-provider {
       font-size: 11px;
@@ -403,9 +350,7 @@
       margin-bottom: 4px;
     }
 
-    .card-provider.sinsa {
-      color: var(--sinsa-green-dark);
-    }
+    .card-provider.sinsa { color: var(--sinsa-green-dark); }
 
     .card-body h2 {
       font-size: 19px;
@@ -508,9 +453,7 @@
       background: #faf8f5;
     }
 
-    .card.soon .card-action-btn {
-      color: var(--tx-muted);
-    }
+    .card.soon .card-action-btn { color: var(--tx-muted); }
 
     /* MENSAJE NO RESULTADOS */
     .no-results {
@@ -570,28 +513,14 @@
       transition: color 0.2s;
     }
 
-    .footer-link:hover {
-      color: var(--warm-accent);
-    }
+    .footer-link:hover { color: var(--warm-accent); }
 
     /* ── RESPONSIVE ─────────────────────── */
     @media (max-width: 640px) {
-      .hero {
-        padding: 44px 16px 24px;
-      }
-
-      .content-wrap {
-        padding: 16px 16px 60px;
-      }
-
-      .grid {
-        grid-template-columns: 1fr;
-        gap: 16px;
-      }
-
-      .card {
-        padding: 20px 18px;
-      }
+      .hero { padding: 44px 16px 24px; }
+      .content-wrap { padding: 16px 16px 60px; }
+      .grid { grid-template-columns: 1fr; gap: 16px; }
+      .card { padding: 20px 18px; }
     }
   </style>
 </head>
@@ -600,10 +529,9 @@
 
   <!-- HERO -->
   <section class="hero">
-    <h1>Presupuestos & Cotizaciones <br><span class="highlight">de Ferreterías</span></h1>
+    <h1>Presupuestos &amp; Cotizaciones <br><span class="highlight">de Ferreterías</span></h1>
     <p>Consulta catálogos actualizados, cotiza insumos con precios oficiales en tiempo real y revisa descuentos por volumen de cada proveedor.</p>
 
-    <!-- Búsqueda rápida minimalista -->
     <div class="search-filter-bar">
       <div class="search-input-wrap">
         <span class="search-icon">
@@ -623,18 +551,17 @@
     <div class="section-header">
       <div class="section-title-group">
         <span class="section-title">Módulos Disponibles</span>
-        <span class="count-badge" id="card-counter">3 Activos</span>
+        <span class="count-badge" id="card-counter">2 Activos</span>
       </div>
     </div>
 
     <div class="grid" id="tools-grid">
 
-      <!-- SINSA: PRESUPUESTOS (PRINCIPAL) -->
+      <!-- SINSA: PRESUPUESTOS -->
       <a class="card card-sinsa" href="/ferreterias/sinsa/presupuestos/" id="card-sinsa-presupuestos"
         data-title="sinsa presupuestos cotizador precios en vivo materiales"
         data-provider="sinsa">
         <div class="card-top">
-          <!-- Logo oficial de Sinsa sobre fondo verde característico -->
           <div class="sinsa-brand-badge" title="Ferretería Sinsa">
             <img src="https://b2csinsa.vtexassets.com/assets/vtex/assets-builder/b2csinsa.store-theme/4.0.16/img/20240919-logo-superior___51c25e88f36f56881a0ce642224ed5c7.svg" alt="Sinsa Nicaragua">
           </div>
@@ -663,14 +590,13 @@
         data-title="sinsa descuentos promociones rebajas ofertas volumen"
         data-provider="sinsa">
         <div class="card-top">
-          <!-- Logo oficial de Sinsa sobre fondo verde característico -->
           <div class="sinsa-brand-badge" title="Ferretería Sinsa">
             <img src="https://b2csinsa.vtexassets.com/assets/vtex/assets-builder/b2csinsa.store-theme/4.0.16/img/20240919-logo-superior___51c25e88f36f56881a0ce642224ed5c7.svg" alt="Sinsa Nicaragua">
           </div>
           <span class="status-pill active">En Línea</span>
         </div>
         <div class="card-body">
-          <div class="card-provider sinsa">Sinsa · Ofertas & Escalas</div>
+          <div class="card-provider sinsa">Sinsa · Ofertas &amp; Escalas</div>
           <h2>Descuentos y Promociones</h2>
           <p>Consulta el módulo de descuentos vigentes, promociones de temporada y escalas de ahorro por volumen aplicables a listas de materiales.</p>
         </div>
@@ -686,33 +612,6 @@
           </div>
         </div>
       </a>
-
-      <!-- FETESA: PRESUPUESTOS -->
-      <a class="card card-fetesa" href="/ferreterias/fetesa/presupuestos/" id="card-fetesa-presupuestos"
-        data-title="fetesa do it center presupuestos cotizador precios materiales herramientas"
-        data-provider="fetesa">
-        <div class="card-top">
-          <div class="fetesa-brand-badge" title="Fetesa Do It Center">F</div>
-          <span class="status-pill active">En L&#237;nea</span>
-        </div>
-        <div class="card-body">
-          <div class="card-provider fetesa">Fetesa &middot; Cat&#225;logo Web</div>
-          <h2>Cotizador de Presupuestos</h2>
-          <p>Busca materiales, herramientas y acabados con precios en vivo del cat&#225;logo web oficial de Fetesa. Crea presupuestos y exporta tu cotizaci&#243;n.</p>
-        </div>
-        <div class="card-footer">
-          <div class="card-tags">
-            <span class="tag">Precios en Vivo</span>
-            <span class="tag">Presupuestos</span>
-            <span class="tag">Herramientas</span>
-          </div>
-          <div class="card-action-btn">
-            <span>Abrir</span>
-            <div class="action-circle">&#x2192;</div>
-          </div>
-        </div>
-      </a>
-
 
       <!-- PRÓXIMA FERRETERÍA: PROVEEDORES DE ACERO Y ESTRUCTURA -->
       <div class="card soon" id="card-pesados" data-title="acero materiales pesados estructural hierro proximamente">
@@ -754,52 +653,36 @@
         <a href="/ferreterias/sinsa/presupuestos/" class="footer-link">Sinsa Presupuestos</a>
         <span>·</span>
         <a href="/ferreterias/sinsa/descuentos/" class="footer-link">Sinsa Descuentos</a>
-        <span>·</span>
-        <a href="/ferreterias/fetesa/presupuestos/" class="footer-link">Fetesa Presupuestos</a>
       </div>
     </div>
   </footer>
 
   <script>
-    // Filtro interactivo en tiempo real
-    const filterInput = document.getElementById('filter-input');
-    const searchClear = document.getElementById('search-clear');
-    const cards = document.querySelectorAll('#tools-grid .card');
-    const noResults = document.getElementById('no-results');
-    const cardCounter = document.getElementById('card-counter');
+    const filterInput  = document.getElementById('filter-input');
+    const searchClear  = document.getElementById('search-clear');
+    const cards        = document.querySelectorAll('#tools-grid .card');
+    const noResults    = document.getElementById('no-results');
+    const cardCounter  = document.getElementById('card-counter');
 
     function applyFilter() {
       const query = filterInput.value.trim().toLowerCase();
       let visibleCount = 0;
-      let activeCount = 0;
 
       cards.forEach(card => {
-        const text = (card.getAttribute('data-title') || '') + ' ' + card.innerText.toLowerCase();
+        const text    = (card.getAttribute('data-title') || '') + ' ' + card.innerText.toLowerCase();
         const matches = !query || text.includes(query);
-        
         card.style.display = matches ? 'flex' : 'none';
-        if (matches) {
-          visibleCount++;
-          if (!card.classList.contains('soon')) activeCount++;
-        }
+        if (matches) visibleCount++;
       });
 
-      // Mostrar/ocultar botón de limpieza
       searchClear.style.display = query.length > 0 ? 'block' : 'none';
-
-      // Mostrar mensaje cuando no hay resultados
-      noResults.style.display = visibleCount === 0 ? 'block' : 'none';
-
-      // Actualizar contador
-      if (query) {
-        cardCounter.textContent = visibleCount + (visibleCount === 1 ? ' resultado' : ' resultados');
-      } else {
-        cardCounter.textContent = '3 Activos';
-      }
+      noResults.style.display   = visibleCount === 0 ? 'block' : 'none';
+      cardCounter.textContent   = query
+        ? visibleCount + (visibleCount === 1 ? ' resultado' : ' resultados')
+        : '2 Activos';
     }
 
     filterInput.addEventListener('input', applyFilter);
-
     searchClear.addEventListener('click', () => {
       filterInput.value = '';
       filterInput.focus();

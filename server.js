@@ -1,19 +1,13 @@
 // server.js — Presupuestos Ferreterías
-// Sirve archivos estáticos y hace proxy a las APIs externas de cada ferretería.
-// Uso: node server.js  →  http://localhost:3001
+// Sirve archivos estáticos y hace proxy a la API de Sinsa.
+// Uso: node server.js  →  http://localhost:3002
 
 const http  = require('http');
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 
-const PORT = process.env.PORT || 3001;
-
-// ── Configuración de APIs por ferretería ────────────────────────────────────
-const FERRETERIAS_API = {
-  sinsa:  'www.sinsa.com.ni',
-  fetesa: 'fetesa.com.ni'
-};
+const PORT = process.env.PORT || 3002;
 
 // ── Tipos MIME permitidos ───────────────────────────────────────────────────
 const MIME_TYPES = {
@@ -32,16 +26,15 @@ const REDIRECTS = {
   '/ferreterias/sinsa/sinsa-descuentos.html':   '/ferreterias/sinsa/descuentos/',
   '/ferreterias/sinsa/presupuestos':            '/ferreterias/sinsa/presupuestos/',
   '/ferreterias/sinsa/descuentos':              '/ferreterias/sinsa/descuentos/',
-  '/ferreterias/fetesa/presupuestos':           '/ferreterias/fetesa/presupuestos/'
 };
 
 // ── Alias específicos de rutas estáticas ────────────────────────────────────
 const ALIASES = {
-  '/':                   'index.html',
-  '/index.html':         'index.html',
-  '/favicon.ico':        'favicon.svg',
-  '/favicon.svg':        'favicon.svg',
-  '/favicon-sinsa.svg':  'favicon-sinsa.svg'
+  '/':                  'index.html',
+  '/index.html':        'index.html',
+  '/favicon.ico':       'favicon.svg',
+  '/favicon.svg':       'favicon.svg',
+  '/favicon-sinsa.svg': 'favicon-sinsa.svg'
 };
 
 http.createServer((req, res) => {
@@ -54,52 +47,12 @@ http.createServer((req, res) => {
     return res.end();
   }
 
-  // ── Fetesa: búsqueda HTML scraping (/api/fetesa/search) ───────────────────
-  // /wp-json/ está bloqueado por Firewall Rules de CF.
-  // Chrome navega a las páginas WooCommerce y extrae datos del DOM.
-  if (pathname === '/api/fetesa/search' || pathname === '/api/fetesa/product') {
-    const fetesaCf = (() => { try { return require('./fetesa-cf'); } catch(_) { return null; } })();
-
-    if (!fetesaCf) {
-      res.writeHead(503, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-      return res.end(JSON.stringify({ error: 'FETESA_CF', message: 'fetesa-cf.js no disponible' }));
-    }
-
-    const json = (code, obj) => {
-      if (res.headersSent) return;
-      res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*' });
-      res.end(JSON.stringify(obj));
-    };
-
-    if (pathname === '/api/fetesa/search') {
-      const q    = url.searchParams.get('q') || '';
-      const page = parseInt(url.searchParams.get('page') || '1');
-      if (!q) return json(400, { error: 'Falta parámetro q' });
-
-      fetesaCf.fetesaSearch(q, page)
-        .then(result => json(200, result))
-        .catch(e    => json(503, { error: 'FETESA_SEARCH', message: e.message }));
-
-    } else {
-      // /api/fetesa/product?url=...
-      const productUrl = url.searchParams.get('url') || '';
-      if (!productUrl) return json(400, { error: 'Falta parámetro url' });
-
-      fetesaCf.fetesaProduct(productUrl)
-        .then(result => json(200, result))
-        .catch(e    => json(503, { error: 'FETESA_PRODUCT', message: e.message }));
-    }
-
-    return;
-  }
-
-
   // ── Proxy API Sinsa (/api/sinsa/*) ────────────────────────────────────────
   if (pathname.startsWith('/api/sinsa/')) {
     const apiPath = pathname.replace('/api/sinsa', '/api');
     const proxy = https.request(
       {
-        host: FERRETERIAS_API.sinsa,
+        host: 'www.sinsa.com.ni',
         path: apiPath + (url.search || ''),
         method: 'GET',
         headers: {
@@ -124,7 +77,7 @@ http.createServer((req, res) => {
   }
 
   // ── Archivos estáticos ────────────────────────────────────────────────────
-  let relPath = ALIASES[pathname] || pathname.replace(/^\/+/, '');
+  let relPath  = ALIASES[pathname] || pathname.replace(/^\/+/, '');
   let fullPath = path.resolve(__dirname, relPath);
 
   // Seguridad: evitar directory traversal
@@ -148,7 +101,7 @@ http.createServer((req, res) => {
         res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
         return res.end('404 - Archivo no encontrado');
       }
-      const ext = path.extname(fullPath).toLowerCase();
+      const ext         = path.extname(fullPath).toLowerCase();
       const contentType = MIME_TYPES[ext] || 'text/html; charset=utf-8';
       res.writeHead(200, { 'content-type': contentType });
       res.end(data);
@@ -160,8 +113,7 @@ http.createServer((req, res) => {
   console.log('  🏗️  Presupuestos Ferreterías — servidor listo');
   console.log('  ─────────────────────────────────────────────');
   console.log('  Landing:            http://localhost:' + PORT + '/');
-  console.log('  Sinsa presupuestos:  http://localhost:' + PORT + '/ferreterias/sinsa/presupuestos/');
-  console.log('  Sinsa descuentos:    http://localhost:' + PORT + '/ferreterias/sinsa/descuentos/');
-  console.log('  Fetesa presupuestos: http://localhost:' + PORT + '/ferreterias/fetesa/presupuestos/');
+  console.log('  Sinsa presupuestos: http://localhost:' + PORT + '/ferreterias/sinsa/presupuestos/');
+  console.log('  Sinsa descuentos:   http://localhost:' + PORT + '/ferreterias/sinsa/descuentos/');
   console.log('');
 });
