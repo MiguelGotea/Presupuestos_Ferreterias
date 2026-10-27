@@ -56,12 +56,27 @@ async function search(reset=true){
   ctrl?.abort(); ctrl=new AbortController();
   $('#count').textContent='Buscando…';
   try{
-    const url=`${API}?query=${encodeURIComponent(query)}&count=${PAGE}&page=${page}`;
-    const r=await fetch(url,{signal:ctrl.signal});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const j=await r.json();
-    products=products.concat((j.products||[]).map(norm));
-    totalRecords=j.recordsFiltered??products.length;
+    // El buscador de VTEX suele tratar la frase completa como una sola secuencia.
+    // Consultar cada término por separado permite recuperar nombres con palabras
+    // intermedias, por ejemplo "abanico de techo industrial".
+    const terms=[...new Set(query.toLocaleLowerCase('es').split(/\s+/).filter(Boolean))];
+    const queries=terms.length>1?terms:[query];
+    const responses=await Promise.all(queries.map(async term=>{
+      const url=`${API}?query=${encodeURIComponent(term)}&count=${PAGE}&page=${page}`;
+      const r=await fetch(url,{signal:ctrl.signal});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    }));
+    const found=new Map();
+    responses.forEach(j=>(j.products||[]).forEach(p=>found.set(String(p.productId),p)));
+    const all=[...found.values()].map(norm);
+    const wanted=terms.map(t=>t.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es'));
+    const matches=terms.length>1?all.filter(p=>{
+      const text=`${p.name} ${p.brand}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+      return wanted.every(t=>text.includes(t));
+    }):all;
+    products=products.concat(matches);
+    totalRecords=Math.max(...responses.map(j=>j.recordsFiltered??0),products.length);
     render();
   }catch(e){
     if(e.name==='AbortError') return;
