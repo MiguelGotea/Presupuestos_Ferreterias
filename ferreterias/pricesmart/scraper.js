@@ -1,30 +1,31 @@
 'use strict';
 /**
- * Descarga local de Ahorros del Fabricante de PriceSmart Nicaragua.
+ * Descarga el catálogo público completo y las promociones de PriceSmart Nicaragua.
  *
  * Uso desde la raíz del proyecto:
  *   node ferreterias/pricesmart/scraper.js
  *
- * Guarda ferreterias/pricesmart/data/productos.json. PriceSmart usa servicios
- * internos de Commercetools/Bloomreach; por eso no se consume su API desde el
- * VPS. El scraper extrae los datos visibles de la página pública de promociones.
+ * Recorre las categorías y su paginación pública. No utiliza las API internas
+ * de Commercetools/Bloomreach ni depende de ellas desde el VPS.
  */
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
-const START_URL = 'https://www.pricesmart.com/es-ni/ahorros-del-fabricante';
+const HOME_URL = 'https://www.pricesmart.com/es-ni/home';
+const PROMOTIONS_URL = 'https://www.pricesmart.com/es-ni/ahorros-del-fabricante';
 const OUT_FILE = path.resolve(__dirname, 'data', 'productos.json');
 const TIMEOUT = 60000;
-const MAX_PAGES = 40;
+const MAX_CATALOG_PAGES = 500;
+const MAX_PROMOTION_PAGES = 40;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function collectPage(page) {
-  await page.waitForSelector('div[id^="product-card-"]', { timeout: TIMEOUT });
+async function collectPage(page, category = '') {
+  await page.waitForSelector('div[id^="product-card-"]', { timeout: TIMEOUT }).catch(() => {});
 
-  return page.$$eval('div[id^="product-card-"]', cards => {
+  return page.$$eval('div[id^="product-card-"]', (cards, currentCategory) => {
     const money = value => {
       const normalized = (value || '').replace(/[^0-9.,]/g, '').replace(/,/g, '');
       return Number.parseFloat(normalized) || 0;
@@ -47,16 +48,16 @@ async function collectPage(page) {
         slug: id,
         link: title?.href || '',
         sku: id.split('-')[0],
-        cat: 'Ahorros del Fabricante',
+        cat: currentCategory,
         price,
         listPrice,
         image: image?.currentSrc || image?.src || '',
         available: !/fuera de inventario|no disponible/i.test(availableText),
-        promotion: card.querySelector('.promo-container')?.textContent?.replace(/\s+/g, ' ').trim() || 'Más Ahorros',
-        isPromotion: true
+        promotion: card.querySelector('.promo-container')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        isPromotion: false
       };
     }).filter(product => product.id && product.name && product.price);
-  });
+  }, category);
 }
 
 async function goToNextPage(page, previousIds) {
@@ -83,9 +84,56 @@ async function goToNextPage(page, previousIds) {
   }
 }
 
+async function getCategories(page) {
+  await page.goto(HOME_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+  await page.waitForSelector('#btnCategoriesMenu', { timeout: TIMEOUT });
+  await page.click('#btnCategoriesMenu');
+  await page.waitForSelector('a[id^="category_"]', { timeout: TIMEOUT });
+  return page.$$eval('a[id^="category_"]', links => links.map(link => ({
+    name: link.textContent.replace(/\s+/g, ' ').trim(), url: link.href
+  })).filter(category => category.name && category.url));
+}
+
+async function scrapeCatalog(page) {
+  const categories = await getCategories(page);
+  const all = [];
+  console.log(`  📂 ${categories.length} categorías principales detectadas`);
+
+  for (const category of categories) {
+    console.log(`\n  ${category.name}`);
+    for (let number = 1; number <= MAX_CATALOG_PAGES; number++) {
+      const url = new URL(category.url);
+      url.searchParams.set('page', String(number));
+      await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+      const products = await collectPage(page, category.name);
+      if (!products.length) break;
+      all.push(...products);
+      console.log(`    p${number}: ${products.length} productos (acum ${all.length})`);
+    }
+  }
+  return { categories, products: all };
+}
+
+async function scrapePromotions(page) {
+  await page.goto(PROMOTIONS_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+  const all = [];
+  let lastIds = [];
+  console.log('\n  Ahorros del Fabricante');
+  for (let number = 1; number <= MAX_PROMOTION_PAGES; number++) {
+    const products = await collectPage(page, 'Ahorros del Fabricante');
+    const ids = products.map(product => product.id);
+    const fresh = products.filter(product => !lastIds.includes(product.id));
+    all.push(...fresh);
+    console.log(`    p${number}: ${fresh.length} promociones (acum ${all.length})`);
+    if (!ids.length || !(await goToNextPage(page, ids))) break;
+    lastIds = ids;
+  }
+  return all;
+}
+
 (async () => {
   console.log('\n══════════════════════════════════════════════');
-  console.log('  PriceSmart — Descarga de Ahorros del Fabricante');
+  console.log('  PriceSmart — Descarga completa del catálogo');
   console.log('══════════════════════════════════════════════\n');
 
   const browser = await puppeteer.launch({
@@ -97,34 +145,43 @@ async function goToNextPage(page, previousIds) {
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 1000 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    await page.goto(START_URL, { waitUntil: 'networkidle2', timeout: TIMEOUT });
-
-    let all = [];
-    let currentIds = [];
-    for (let number = 1; number <= MAX_PAGES; number++) {
-      const products = await collectPage(page);
-      const ids = products.map(product => product.id);
-      const newProducts = products.filter(product => !currentIds.includes(product.id));
-      all = all.concat(newProducts);
-      console.log(`  Página ${number}: ${newProducts.length} productos (acumulado ${all.length})`);
-
-      if (!ids.length || !(await goToNextPage(page, ids))) break;
-      currentIds = ids;
-      await sleep(800);
-    }
-
-    const seen = new Set();
-    const products = all.filter(product => {
-      if (seen.has(product.id)) return false;
-      seen.add(product.id);
-      return true;
+    await page.setRequestInterception(true);
+    page.on('request', request => {
+      const type = request.resourceType();
+      const url = request.url();
+      if (['image', 'font', 'media'].includes(type) || /google-analytics|googletagmanager|hotjar|doubleclick|newrelic/i.test(url)) request.abort();
+      else request.continue();
     });
+    const catalog = await scrapeCatalog(page);
+    const promotions = await scrapePromotions(page);
+    const byId = new Map();
+    for (const product of catalog.products) {
+      const existing = byId.get(product.id);
+      if (!existing) byId.set(product.id, product);
+      else if (!existing.cat.includes(product.cat)) existing.cat += ` · ${product.cat}`;
+    }
+    const promotionById = new Map(promotions.map(product => [product.id, product]));
+    for (const product of byId.values()) {
+      const promotion = promotionById.get(product.id);
+      if (!promotion) continue;
+      product.isPromotion = true;
+      product.promotion = promotion.promotion || 'Más Ahorros';
+      if (promotion.listPrice > product.price) product.listPrice = promotion.listPrice;
+    }
+    for (const promotion of promotions) {
+      if (!byId.has(promotion.id)) byId.set(promotion.id, {
+        ...promotion, isPromotion: true, promotion: promotion.promotion || 'Más Ahorros'
+      });
+    }
+    const products = [...byId.values()];
     const withDiscount = products.filter(product => product.listPrice > product.price).length;
 
     fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
     fs.writeFileSync(OUT_FILE, JSON.stringify({
       generatedAt: new Date().toISOString(),
-      source: START_URL,
+      source: HOME_URL,
+      promotionsSource: PROMOTIONS_URL,
+      categoryCount: catalog.categories.length,
       totalProducts: products.length,
       withPromotion: products.filter(product => product.isPromotion).length,
       withDiscount,
@@ -132,8 +189,9 @@ async function goToNextPage(page, previousIds) {
     }), 'utf8');
 
     console.log('\n══════════════════════════════════════════════');
-    console.log(`  ✅ ${products.length} productos descargados`);
-    console.log(`  🏷️  ${products.length} en promoción oficial`);
+    console.log(`  ✅ ${products.length} productos únicos`);
+    console.log(`  🗂️  ${catalog.categories.length} categorías`);
+    console.log(`  🏷️  ${products.filter(product => product.isPromotion).length} en promoción oficial`);
     console.log(`  💲 ${withDiscount} con precio anterior publicado`);
     console.log(`  📄 ${OUT_FILE}`);
     console.log('══════════════════════════════════════════════\n');
