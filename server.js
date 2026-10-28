@@ -16,15 +16,16 @@ const PORT = process.env.PORT || 3002;
 // editoriales como "Rebajas" ni hace cientos de consultas por cada visitante.
 const WALMART_CATALOG_COLLECTION = '1040';
 const WALMART_PAGE_SIZE = 50;
+const WALMART_MAX_CATEGORY_SEGMENT = 2500;
 const walmartPromotions = {
   items: [], total: 0, scanned: 0, running: false, completedAt: null, error: null
 };
 
-function walmartCatalogPage(from) {
+function walmartCatalogPage(categoryPath, from) {
   return new Promise((resolve, reject) => {
     const request = https.get({
       host: 'www.walmart.com.ni',
-      path: `/api/catalog_system/pub/products/search?fq=H:${WALMART_CATALOG_COLLECTION}&_from=${from}&_to=${from + WALMART_PAGE_SIZE - 1}`,
+      path: `/api/catalog_system/pub/products/search?fq=H:${WALMART_CATALOG_COLLECTION}&fq=C:/${categoryPath}/&_from=${from}&_to=${from + WALMART_PAGE_SIZE - 1}`,
       headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 presupuestos-ferreterias' }
     }, response => {
       let body = '';
@@ -46,11 +47,11 @@ function walmartCatalogPage(from) {
   });
 }
 
-async function walmartCatalogPageWithRetry(from, attempts = 5) {
+async function walmartCatalogPageWithRetry(categoryPath, from, attempts = 5) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
-      return await walmartCatalogPage(from);
+      return await walmartCatalogPage(categoryPath, from);
     } catch (error) {
       lastError = error;
       // Walmart/CloudFront puede responder 400 temporalmente después de una
@@ -60,6 +61,36 @@ async function walmartCatalogPageWithRetry(from, attempts = 5) {
     }
   }
   throw lastError;
+}
+
+function walmartPromotionCategories() {
+  return new Promise((resolve, reject) => {
+    const request = https.get({
+      host: 'www.walmart.com.ni',
+      path: `/api/catalog_system/pub/facets/search?fq=H:${WALMART_CATALOG_COLLECTION}`,
+      headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 presupuestos-ferreterias' }
+    }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) return reject(new Error(`Walmart respondió HTTP ${response.statusCode} al leer categorías`));
+        try {
+          const splitLargeCategory = (category, parentPath = '') => {
+            const children = category.Children || [];
+            const categoryPath = parentPath ? `${parentPath}/${category.Id}` : String(category.Id);
+            if (Number(category.Quantity || 0) <= WALMART_MAX_CATEGORY_SEGMENT || !children.length) {
+              return [{ path: categoryPath, name: category.Name, quantity: Number(category.Quantity || 0) }];
+            }
+            return children.flatMap(child => splitLargeCategory(child, categoryPath));
+          };
+          resolve((JSON.parse(body).CategoriesTrees || []).flatMap(splitLargeCategory));
+        } catch (error) { reject(error); }
+      });
+    });
+    request.setTimeout(30000, () => request.destroy(new Error('Tiempo de espera agotado al leer categorías Walmart')));
+    request.on('error', reject);
+  });
 }
 
 function compactDiscountProduct(product) {
@@ -109,25 +140,30 @@ async function scanWalmartPromotions() {
   walmartPromotions.running = true;
   const seen = new Set();
   try {
-    for (let from = 0; ; from += WALMART_PAGE_SIZE) {
-      const page = await walmartCatalogPageWithRetry(from);
-      if (page.total) walmartPromotions.total = page.total;
-      walmartPromotions.scanned += page.products.length;
-      for (const source of page.products) {
-        const product = compactDiscountProduct(source);
-        if (!product) continue;
-        product.items = product.items.filter(item => {
-          const key = `${product.productId}-${item.itemId}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        if (product.items.length) walmartPromotions.items.push(product);
+    // VTEX rechaza páginas después de la posición 2,549. Se toma el árbol de
+    // categorías y sólo se subdividen las categorías que superan ese límite.
+    const categories = await walmartPromotionCategories();
+    walmartPromotions.total = categories.reduce((sum, category) => sum + category.quantity, 0);
+    for (const category of categories) {
+      for (let from = 0; from < category.quantity; from += WALMART_PAGE_SIZE) {
+        const page = await walmartCatalogPageWithRetry(category.path, from);
+        walmartPromotions.scanned += page.products.length;
+        for (const source of page.products) {
+          const product = compactDiscountProduct(source);
+          if (!product) continue;
+          product.items = product.items.filter(item => {
+            const key = `${product.productId}-${item.itemId}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          if (product.items.length) walmartPromotions.items.push(product);
+        }
+        if (page.products.length < WALMART_PAGE_SIZE) break;
+        // Cadencia deliberadamente moderada: es una exploración de fondo, no
+        // una búsqueda interactiva, y evita activar límites del catálogo VTEX.
+        await new Promise(resolve => setTimeout(resolve, 450));
       }
-      if (page.products.length < WALMART_PAGE_SIZE || (page.total && walmartPromotions.scanned >= page.total)) break;
-      // Cadencia deliberadamente moderada: es una exploración de fondo, no una
-      // búsqueda interactiva, y evita activar los límites del catálogo VTEX.
-      await new Promise(resolve => setTimeout(resolve, 450));
     }
     walmartPromotions.completedAt = new Date().toISOString();
   } catch (error) {
