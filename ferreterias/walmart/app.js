@@ -9,6 +9,7 @@ const mode = document.body.dataset.mode;
 const discount = p => p.list > p.price ? Math.round((1 - p.price / p.list) * 100) : 0;
 const isDiscounted = p => p.list > p.price;
 
+
 let query = '', offset = 0, exhausted = false, loading = false, products = [], timer;
 const pool = new Map();
 let budget = JSON.parse(localStorage.getItem('walmart-budget') || '[]');
