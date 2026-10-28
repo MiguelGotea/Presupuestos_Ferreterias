@@ -309,12 +309,13 @@ async function scrapePromotions(page) {
       products
     });
     if (!promotionsOnly) {
-      writeJsonSafely(PROGRESS_FILE, {
-        version: 1,
-        complete: true,
-        completedAt: new Date().toISOString(),
-        totalProducts: products.length
-      });
+      try {
+        fs.rmSync(PROGRESS_FILE, { force: true });
+      } catch (error) {
+        // El catálogo ya fue publicado; un bloqueo temporal del antivirus no
+        // debe convertir una descarga exitosa en un error.
+        console.warn(`  ⚠️ No se pudo eliminar el checkpoint temporal: ${error.code || error.message}`);
+      }
     }
 
     console.log('\n══════════════════════════════════════════════');

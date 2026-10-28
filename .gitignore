@@ -5,4 +5,5 @@ logs/*.log
 .vscode/
 *.log
 npm-debug.log*
+ferreterias/pricesmart/data/catalog-progress.json
 

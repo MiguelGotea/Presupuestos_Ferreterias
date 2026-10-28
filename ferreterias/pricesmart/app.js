@@ -79,7 +79,7 @@ async function load() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     all = data.products || [];
-    if (data.generatedAt) $('#updated').textContent = `Última descarga: ${new Date(data.generatedAt).toLocaleString('es-NI')}`;
+    if (data.generatedAt) $('#updated').textContent = `Actualizado: ${new Date(data.generatedAt).toLocaleString('es-NI')}`;
     render(); renderBudget();
   } catch (error) {
     $('#results').innerHTML = `<div class="empty">No se pudo leer el catálogo: ${esc(error.message)}.</div>`;
