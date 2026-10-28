@@ -84,7 +84,10 @@ function walmartPromotionCategories() {
             }
             return children.flatMap(child => splitLargeCategory(child, categoryPath));
           };
-          resolve((JSON.parse(body).CategoriesTrees || []).flatMap(splitLargeCategory));
+          // No pasar splitLargeCategory directamente a flatMap: éste también
+          // entrega el índice como segundo argumento, que se interpretaría por
+          // error como parte de la ruta jerárquica de la categoría.
+          resolve((JSON.parse(body).CategoriesTrees || []).flatMap(category => splitLargeCategory(category)));
         } catch (error) { reject(error); }
       });
     });
@@ -145,9 +148,11 @@ async function scanWalmartPromotions() {
     const categories = await walmartPromotionCategories();
     walmartPromotions.total = categories.reduce((sum, category) => sum + category.quantity, 0);
     for (const category of categories) {
+      let categoryScanned = 0;
       for (let from = 0; from < category.quantity; from += WALMART_PAGE_SIZE) {
         const page = await walmartCatalogPageWithRetry(category.path, from);
         walmartPromotions.scanned += page.products.length;
+        categoryScanned += page.products.length;
         for (const source of page.products) {
           const product = compactDiscountProduct(source);
           if (!product) continue;
@@ -163,6 +168,11 @@ async function scanWalmartPromotions() {
         // Cadencia deliberadamente moderada: es una exploración de fondo, no
         // una búsqueda interactiva, y evita activar límites del catálogo VTEX.
         await new Promise(resolve => setTimeout(resolve, 450));
+      }
+      // Evita declarar terminado un catálogo si una ruta inválida o una
+      // respuesta inesperada dejó una categoría publicada sin explorar.
+      if (category.quantity > 0 && categoryScanned === 0) {
+        throw new Error(`La categoría Walmart "${category.name}" no devolvió productos`);
       }
     }
     walmartPromotions.completedAt = new Date().toISOString();
