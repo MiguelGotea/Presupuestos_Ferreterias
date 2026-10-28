@@ -9,6 +9,100 @@ const path  = require('path');
 
 const PORT = process.env.PORT || 3002;
 
+// ── Exploración de descuentos Walmart ──────────────────────────────────────
+// La colección 1040 es el catálogo completo publicado por Walmart. Se recorre
+// una vez en el VPS y se conserva sólo el subconjunto que realmente tiene
+// ListPrice > Price; así la página de promociones no depende de colecciones
+// editoriales como "Rebajas" ni hace cientos de consultas por cada visitante.
+const WALMART_CATALOG_COLLECTION = '1040';
+const WALMART_PAGE_SIZE = 50;
+const walmartPromotions = {
+  items: [], total: 0, scanned: 0, running: false, completedAt: null, error: null
+};
+
+function walmartCatalogPage(from) {
+  return new Promise((resolve, reject) => {
+    const request = https.get({
+      host: 'www.walmart.com.ni',
+      path: `/api/catalog_system/pub/products/search?fq=H:${WALMART_CATALOG_COLLECTION}&_from=${from}&_to=${from + WALMART_PAGE_SIZE - 1}`,
+      headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 presupuestos-ferreterias' }
+    }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return reject(new Error(`Walmart respondió HTTP ${response.statusCode}`));
+        }
+        try {
+          const resources = String(response.headers.resources || '');
+          const total = Number(resources.split('/')[1]) || 0;
+          resolve({ products: JSON.parse(body), total });
+        } catch (error) { reject(error); }
+      });
+    });
+    request.setTimeout(30000, () => request.destroy(new Error('Tiempo de espera agotado al consultar Walmart')));
+    request.on('error', reject);
+  });
+}
+
+function compactDiscountProduct(product) {
+  const discountedItems = (product.items || []).filter(item => {
+    const offer = item.sellers?.[0]?.commertialOffer || {};
+    return Number(offer.ListPrice || 0) > Number(offer.Price || 0);
+  }).map(item => ({
+    itemId: item.itemId, name: item.name, nameComplete: item.nameComplete, ean: item.ean,
+    referenceId: item.referenceId, measurementUnit: item.measurementUnit, unitMultiplier: item.unitMultiplier,
+    images: item.images,
+    sellers: (item.sellers || []).slice(0, 1).map(seller => ({
+      sellerId: seller.sellerId, sellerName: seller.sellerName,
+      commertialOffer: seller.commertialOffer
+    }))
+  }));
+  if (!discountedItems.length) return null;
+  return {
+    productId: product.productId, productName: product.productName, brand: product.brand,
+    productReference: product.productReference, categories: product.categories, description: product.description,
+    link: product.link, productClusters: product.productClusters, items: discountedItems
+  };
+}
+
+async function scanWalmartPromotions() {
+  if (walmartPromotions.running) return;
+  walmartPromotions.items = [];
+  walmartPromotions.total = 0;
+  walmartPromotions.scanned = 0;
+  walmartPromotions.error = null;
+  walmartPromotions.completedAt = null;
+  walmartPromotions.running = true;
+  const seen = new Set();
+  try {
+    for (let from = 0; ; from += WALMART_PAGE_SIZE) {
+      const page = await walmartCatalogPage(from);
+      if (page.total) walmartPromotions.total = page.total;
+      walmartPromotions.scanned += page.products.length;
+      for (const source of page.products) {
+        const product = compactDiscountProduct(source);
+        if (!product) continue;
+        product.items = product.items.filter(item => {
+          const key = `${product.productId}-${item.itemId}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        if (product.items.length) walmartPromotions.items.push(product);
+      }
+      if (page.products.length < WALMART_PAGE_SIZE || (page.total && walmartPromotions.scanned >= page.total)) break;
+      await new Promise(resolve => setTimeout(resolve, 80));
+    }
+    walmartPromotions.completedAt = new Date().toISOString();
+  } catch (error) {
+    walmartPromotions.error = error.message;
+  } finally {
+    walmartPromotions.running = false;
+  }
+}
+
 // ── Tipos MIME permitidos ───────────────────────────────────────────────────
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -115,6 +209,29 @@ http.createServer((req, res) => {
     });
     proxy.end();
     return;
+  }
+
+  // ── Descuentos reales de todo el catálogo Walmart ─────────────────────────
+  // Devuelve el cache vivo mientras el VPS recorre el catálogo completo. No se
+  // basa en la colección editorial de "Rebajas"; compara precio de lista vs.
+  // precio actual para cada SKU.
+  if (pathname === '/api/walmart/promotions') {
+    if (!walmartPromotions.running && (!walmartPromotions.completedAt || url.searchParams.has('refresh'))) {
+      scanWalmartPromotions();
+    }
+    res.writeHead(200, {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'access-control-allow-origin': '*'
+    });
+    return res.end(JSON.stringify({
+      running: walmartPromotions.running,
+      total: walmartPromotions.total,
+      scanned: walmartPromotions.scanned,
+      completedAt: walmartPromotions.completedAt,
+      error: walmartPromotions.error,
+      products: walmartPromotions.items
+    }));
   }
 
   // ── Proxy de catálogo público Walmart / VTEX ─────────────────────────────

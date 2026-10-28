@@ -1,7 +1,5 @@
 const API = '/api/walmart/catalog_system/pub/products/search';
 const PAGE_SIZE = 50;
-// Colecciones de rebajas identificadas en el catálogo público actual de Walmart.
-const PROMO_COLLECTIONS = ['2529', '2530'];
 const $ = s => document.querySelector(s);
 const money = n => 'C$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
@@ -10,7 +8,7 @@ const discount = p => p.list > p.price ? Math.round((1 - p.price / p.list) * 100
 const isDiscounted = p => p.list > p.price;
 
 
-let query = '', offset = 0, exhausted = false, loading = false, products = [], timer;
+let query = '', offset = 0, exhausted = false, loading = false, products = [], timer, promoTimer, promotionStatus = '';
 const pool = new Map();
 let budget = JSON.parse(localStorage.getItem('walmart-budget') || '[]');
 
@@ -60,15 +58,22 @@ async function loadCatalog(reset = true) {
   loading = false; render();
 }
 
-async function loadPromotions(reset = true) {
+async function loadPromotions(refresh = false) {
   if (loading) return;
-  if (reset) { products = []; offset = 0; exhausted = false; }
+  clearTimeout(promoTimer);
   loading = true; render();
   try {
-    const pages = await Promise.all(PROMO_COLLECTIONS.map(id => fetchCatalog(`?fq=H:${id}&_from=${offset}&_to=${offset + PAGE_SIZE - 1}`)));
-    append(pages.flatMap(page => page.flatMap(normalize)).filter(isDiscounted));
-    offset += PAGE_SIZE; exhausted = pages.every(page => page.length < PAGE_SIZE);
-  } catch (error) { showError(error); }
+    const response = await fetch(`/api/walmart/promotions${refresh ? '?refresh=1' : ''}`);
+    if (!response.ok) throw new Error(`El explorador respondió HTTP ${response.status}`);
+    const scan = await response.json();
+    products = (scan.products || []).flatMap(normalize).filter(isDiscounted);
+    exhausted = !scan.running;
+    promotionStatus = scan.running
+      ? ` · explorando ${Number(scan.scanned || 0).toLocaleString('es-NI')}${scan.total ? ` de ${Number(scan.total).toLocaleString('es-NI')}` : ''}`
+      : scan.completedAt ? ` · catálogo completo explorado` : '';
+    if (scan.error) promotionStatus = ` · error de exploración: ${scan.error}`;
+    else if (scan.running) promoTimer = setTimeout(() => loadPromotions(false), 1200);
+  } catch (error) { promotionStatus = ''; showError(error); }
   loading = false; render();
 }
 
@@ -93,8 +98,8 @@ function row(p) {
 
 function render() {
   const list = filtered();
-  $('#count').textContent = loading ? 'Consultando Walmart…' : `${list.length} producto${list.length === 1 ? '' : 's'}${mode === 'discounts' ? ' en rebajas' : ''}`;
-  $('#more').hidden = exhausted || loading || (mode === 'catalog' && query.trim().length < 2);
+  $('#count').textContent = loading ? 'Consultando Walmart…' : `${list.length} producto${list.length === 1 ? '' : 's'}${mode === 'discounts' ? ` con descuento${promotionStatus}` : ''}`;
+  $('#more').hidden = mode === 'discounts' || exhausted || loading || (mode === 'catalog' && query.trim().length < 2);
   $('#more').textContent = loading ? 'Consultando…' : mode === 'discounts' ? 'Cargar más promociones' : 'Cargar más resultados';
   if (!list.length) {
     const message = loading ? 'Consultando el catálogo oficial…' : mode === 'discounts' ? 'No hay promociones publicadas en los lotes consultados.' : query.trim().length < 2 ? 'Escribe al menos dos caracteres para buscar en Walmart.' : 'No se encontraron productos con esos criterios.';
@@ -133,7 +138,7 @@ function renderBudget() {
 
 $('#query').addEventListener('input', event => { query = event.target.value; clearTimeout(timer); timer = setTimeout(() => mode === 'discounts' ? render() : loadCatalog(true), 300); });
 $('#only-discount').addEventListener('change', render);
-$('#more').onclick = () => mode === 'discounts' ? loadPromotions(false) : loadCatalog(false);
+$('#more').onclick = () => loadCatalog(false);
 $('#clear-budget').onclick = () => { budget = []; saveBudget(); renderBudget(); };
 $('#print-budget').onclick = () => window.print();
 document.addEventListener('click', event => {
@@ -148,4 +153,5 @@ $('#promo-link').href = mode === 'discounts' ? '/ferreterias/walmart/presupuesto
 $('#promo-link').textContent = mode === 'discounts' ? '📋 Ver catálogo' : '🏷️ Ver promociones';
 $('#query').placeholder = mode === 'discounts' ? 'Filtrar promociones cargadas por producto, marca o SKU…' : 'Buscar por producto, marca, SKU o EAN…';
 $('#only-discount-wrap').hidden = mode === 'discounts';
+$('#reload-promotions')?.addEventListener('click', () => loadPromotions(true));
 renderBudget(); if (mode === 'discounts') loadPromotions(); else render();
