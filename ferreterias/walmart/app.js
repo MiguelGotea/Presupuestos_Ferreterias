@@ -8,7 +8,7 @@ const discount = p => p.list > p.price ? Math.round((1 - p.price / p.list) * 100
 const isDiscounted = p => p.list > p.price;
 
 
-let query = '', offset = 0, exhausted = false, loading = false, products = [], timer, promoTimer, promotionStatus = '';
+let query = '', offset = 0, exhausted = false, loading = false, products = [], timer, promoTimer, promotionStatus = '', promotionOffset = 0;
 const pool = new Map();
 let budget = JSON.parse(localStorage.getItem('walmart-budget') || '[]');
 
@@ -61,12 +61,20 @@ async function loadCatalog(reset = true) {
 async function loadPromotions(refresh = false) {
   if (loading) return;
   clearTimeout(promoTimer);
+  if (refresh) {
+    products = [];
+    pool.clear();
+    promotionOffset = 0;
+  }
   loading = true; render();
   try {
-    const response = await fetch(`/api/walmart/promotions${refresh ? '?refresh=1' : ''}`);
+    const params = new URLSearchParams({ from: String(promotionOffset) });
+    if (refresh) params.set('refresh', '1');
+    const response = await fetch(`/api/walmart/promotions?${params}`);
     if (!response.ok) throw new Error(`El explorador respondió HTTP ${response.status}`);
     const scan = await response.json();
-    products = (scan.products || []).flatMap(normalize).filter(isDiscounted);
+    append((scan.products || []).flatMap(normalize).filter(isDiscounted));
+    promotionOffset = Number(scan.count || promotionOffset);
     exhausted = !scan.running;
     promotionStatus = scan.running
       ? ` · explorando ${Number(scan.scanned || 0).toLocaleString('es-NI')}${scan.total ? ` de ${Number(scan.total).toLocaleString('es-NI')}` : ''}`
@@ -98,8 +106,12 @@ function row(p) {
 
 function render() {
   const list = filtered();
-  $('#count').textContent = loading ? 'Consultando Walmart…' : `${list.length} producto${list.length === 1 ? '' : 's'}${mode === 'discounts' ? ` con descuento${promotionStatus}` : ''}`;
-  $('#more').hidden = mode === 'discounts' || exhausted || loading || (mode === 'catalog' && query.trim().length < 2);
+  $('#count').textContent = mode === 'discounts'
+    ? `${list.length} producto${list.length === 1 ? '' : 's'} con descuento${promotionStatus}`
+    : loading ? 'Consultando Walmart…' : `${list.length} producto${list.length === 1 ? '' : 's'}`;
+  const hideMore = mode === 'discounts' || exhausted || loading || (mode === 'catalog' && query.trim().length < 2);
+  $('#more').hidden = hideMore;
+  $('#more').style.display = hideMore ? 'none' : 'inline-block';
   $('#more').textContent = loading ? 'Consultando…' : mode === 'discounts' ? 'Cargar más promociones' : 'Cargar más resultados';
   if (!list.length) {
     const message = loading ? 'Consultando el catálogo oficial…' : mode === 'discounts' ? 'No hay promociones publicadas en los lotes consultados.' : query.trim().length < 2 ? 'Escribe al menos dos caracteres para buscar en Walmart.' : 'No se encontraron productos con esos criterios.';

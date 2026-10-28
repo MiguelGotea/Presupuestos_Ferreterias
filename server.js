@@ -46,6 +46,19 @@ function walmartCatalogPage(from) {
   });
 }
 
+async function walmartCatalogPageWithRetry(from, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await walmartCatalogPage(from);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, attempt * 1200));
+    }
+  }
+  throw lastError;
+}
+
 function compactDiscountProduct(product) {
   const discountedItems = (product.items || []).filter(item => {
     const offer = item.sellers?.[0]?.commertialOffer || {};
@@ -54,10 +67,26 @@ function compactDiscountProduct(product) {
     itemId: item.itemId, name: item.name, nameComplete: item.nameComplete, ean: item.ean,
     referenceId: item.referenceId, measurementUnit: item.measurementUnit, unitMultiplier: item.unitMultiplier,
     images: item.images,
-    sellers: (item.sellers || []).slice(0, 1).map(seller => ({
-      sellerId: seller.sellerId, sellerName: seller.sellerName,
-      commertialOffer: seller.commertialOffer
-    }))
+    sellers: (item.sellers || []).slice(0, 1).map(seller => {
+      const offer = seller.commertialOffer || {};
+      // No conservar cuotas, SLA, objetos de checkout ni metadatos extensos.
+      // El modal sólo necesita estos campos de oferta publicados.
+      return {
+        sellerId: seller.sellerId,
+        sellerName: seller.sellerName,
+        commertialOffer: {
+          Price: offer.Price,
+          ListPrice: offer.ListPrice,
+          PriceWithoutDiscount: offer.PriceWithoutDiscount,
+          FullSellingPrice: offer.FullSellingPrice,
+          PriceValidUntil: offer.PriceValidUntil,
+          IsAvailable: offer.IsAvailable,
+          AvailableQuantity: offer.AvailableQuantity,
+          Teasers: offer.Teasers,
+          PromotionTeasers: offer.PromotionTeasers
+        }
+      };
+    })
   }));
   if (!discountedItems.length) return null;
   return {
@@ -78,7 +107,7 @@ async function scanWalmartPromotions() {
   const seen = new Set();
   try {
     for (let from = 0; ; from += WALMART_PAGE_SIZE) {
-      const page = await walmartCatalogPage(from);
+      const page = await walmartCatalogPageWithRetry(from);
       if (page.total) walmartPromotions.total = page.total;
       walmartPromotions.scanned += page.products.length;
       for (const source of page.products) {
@@ -216,7 +245,9 @@ http.createServer((req, res) => {
   // basa en la colección editorial de "Rebajas"; compara precio de lista vs.
   // precio actual para cada SKU.
   if (pathname === '/api/walmart/promotions') {
-    if (!walmartPromotions.running && (!walmartPromotions.completedAt || url.searchParams.has('refresh'))) {
+    // Tras un fallo se conserva el avance y se pausa. Sólo “Actualizar” puede
+    // iniciar de nuevo; los sondeos del navegador nunca reinician desde cero.
+    if (!walmartPromotions.running && (url.searchParams.has('refresh') || (!walmartPromotions.completedAt && !walmartPromotions.error))) {
       scanWalmartPromotions();
     }
     res.writeHead(200, {
@@ -224,13 +255,17 @@ http.createServer((req, res) => {
       'cache-control': 'no-store',
       'access-control-allow-origin': '*'
     });
+    const from = Math.max(0, Number(url.searchParams.get('from')) || 0);
     return res.end(JSON.stringify({
       running: walmartPromotions.running,
       total: walmartPromotions.total,
       scanned: walmartPromotions.scanned,
+      count: walmartPromotions.items.length,
       completedAt: walmartPromotions.completedAt,
       error: walmartPromotions.error,
-      products: walmartPromotions.items
+      // Cada visitante recibe sólo los descuentos agregados desde su último
+      // sondeo; evita reenviar el catálogo acumulado cada pocos segundos.
+      products: walmartPromotions.items.slice(from)
     }));
   }
 
