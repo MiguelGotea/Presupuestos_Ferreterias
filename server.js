@@ -122,7 +122,9 @@ http.createServer((req, res) => {
   // del visitante a Walmart. La disponibilidad final depende de la sucursal
   // seleccionada por el cliente en el sitio oficial.
   if (pathname.startsWith('/api/walmart/catalog_system/pub/')) {
-    const apiPath = pathname.replace('/api/walmart', '');
+    // /api/walmart/catalog_system/... → /api/catalog_system/...
+    // (el prefijo /api es obligatorio en el endpoint VTEX de Walmart).
+    const apiPath = pathname.replace('/api/walmart', '/api');
     const proxy = https.request(
       {
         host: 'www.walmart.com.ni',
