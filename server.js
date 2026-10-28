@@ -46,14 +46,17 @@ function walmartCatalogPage(from) {
   });
 }
 
-async function walmartCatalogPageWithRetry(from, attempts = 3) {
+async function walmartCatalogPageWithRetry(from, attempts = 5) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       return await walmartCatalogPage(from);
     } catch (error) {
       lastError = error;
-      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, attempt * 1200));
+      // Walmart/CloudFront puede responder 400 temporalmente después de una
+      // secuencia sostenida. Se respeta una pausa creciente antes de volver a
+      // pedir exactamente la misma página, sin descartar el avance previo.
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, attempt * 3000));
     }
   }
   throw lastError;
@@ -122,7 +125,9 @@ async function scanWalmartPromotions() {
         if (product.items.length) walmartPromotions.items.push(product);
       }
       if (page.products.length < WALMART_PAGE_SIZE || (page.total && walmartPromotions.scanned >= page.total)) break;
-      await new Promise(resolve => setTimeout(resolve, 80));
+      // Cadencia deliberadamente moderada: es una exploración de fondo, no una
+      // búsqueda interactiva, y evita activar los límites del catálogo VTEX.
+      await new Promise(resolve => setTimeout(resolve, 450));
     }
     walmartPromotions.completedAt = new Date().toISOString();
   } catch (error) {
