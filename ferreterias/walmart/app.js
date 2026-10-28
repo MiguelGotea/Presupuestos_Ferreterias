@@ -11,6 +11,50 @@ const isDiscounted = p => p.list > p.price;
 let query = '', offset = 0, exhausted = false, loading = false, products = [], timer, promoTimer, promotionStatus = '', promotionOffset = 0;
 const pool = new Map();
 let budget = JSON.parse(localStorage.getItem('walmart-budget') || '[]');
+let promoSortKey = 'discount', promoSortDir = -1;
+let promoBrands = null, promoCategories = null;
+
+function promoCategory(product) { return product.category.split(' › ')[0] || 'Sin categoría'; }
+function promoFilterValues(kind) {
+  const values = new Set(products.map(product => kind === 'brand' ? product.brand : promoCategory(product)));
+  return [...values].sort((a, b) => a.localeCompare(b, 'es'));
+}
+function promoFilterSet(kind) { return kind === 'brand' ? promoBrands : promoCategories; }
+function setPromoFilterSet(kind, value) { if (kind === 'brand') promoBrands = value; else promoCategories = value; }
+
+function setupPromotionControls() {
+  if (mode !== 'discounts') return;
+  document.head.insertAdjacentHTML('beforeend', `<style>
+    .promo-table{min-width:1120px}.promo-head{white-space:nowrap}.promo-sort{border:0;background:none;padding:0;color:inherit;font:inherit;font-weight:800;cursor:pointer;text-transform:uppercase}.promo-sort:hover{color:#0071ce}.promo-filter{margin-left:5px;border:1px solid #c7d5e1;background:#fff;border-radius:5px;padding:2px 5px;color:#456177;font-size:10px;font-weight:700;cursor:pointer}.promo-filter.active{border-color:#0071ce;color:#0071ce;background:#eaf4fd}.saving-cell{font-weight:700;color:#087443;text-align:right;white-space:nowrap}.discount-cell{text-align:center;white-space:nowrap}.discount-cell .discount{margin:0}.promo-filter-popover{position:fixed;z-index:30;width:275px;max-height:380px;background:#fff;border:1px solid #bfcfdb;border-radius:9px;box-shadow:0 12px 28px #183a5940;padding:10px;display:none}.promo-filter-popover.open{display:block}.promo-filter-title{display:flex;justify-content:space-between;align-items:center;font-weight:800;margin-bottom:8px}.promo-filter-title button{border:0;background:none;font-size:18px;cursor:pointer;color:#627383}.promo-filter-actions{display:flex;gap:10px;margin-bottom:8px}.promo-filter-actions button{border:0;background:none;color:#0071ce;font-size:11px;padding:0;cursor:pointer}.promo-filter-search{width:100%;border:1px solid #c7d5e1;border-radius:5px;padding:7px;font:12px Inter,Arial,sans-serif}.promo-filter-list{max-height:240px;overflow:auto;margin-top:8px}.promo-filter-option{display:flex;align-items:center;gap:7px;padding:5px 2px;font-size:12px}.promo-filter-option input{accent-color:#0071ce}.promo-filter-option small{margin-left:auto;color:#627383}
+  </style>`);
+  document.body.insertAdjacentHTML('beforeend', `<div class="promo-filter-popover" id="promo-filter-popover"><div class="promo-filter-title"><span id="promo-filter-title">Filtrar</span><button type="button" id="promo-filter-close" aria-label="Cerrar">×</button></div><div class="promo-filter-actions"><button type="button" data-promo-filter-action="all">Todas</button><button type="button" data-promo-filter-action="none">Ninguna</button><button type="button" data-promo-filter-action="reset">Restablecer</button></div><input class="promo-filter-search" id="promo-filter-search" placeholder="Buscar opción…"><div class="promo-filter-list" id="promo-filter-list"></div></div>`);
+}
+
+let activePromoFilter = null, activePromoFilterButton = null;
+function renderPromoFilterPopover() {
+  if (!activePromoFilter) return;
+  const values = promoFilterValues(activePromoFilter);
+  const selected = promoFilterSet(activePromoFilter);
+  const term = $('#promo-filter-search').value.trim().toLocaleLowerCase('es');
+  $('#promo-filter-list').innerHTML = values.filter(value => !term || value.toLocaleLowerCase('es').includes(term)).map(value => {
+    const checked = selected === null || selected.has(value);
+    const count = products.filter(product => (activePromoFilter === 'brand' ? product.brand : promoCategory(product)) === value).length;
+    return `<label class="promo-filter-option"><input type="checkbox" data-promo-filter-item="${activePromoFilter}" value="${esc(value)}" ${checked ? 'checked' : ''}><span>${esc(value)}</span><small>${count}</small></label>`;
+  }).join('') || '<div class="sub">Sin opciones</div>';
+}
+function openPromoFilter(kind, button) {
+  const popover = $('#promo-filter-popover');
+  if (activePromoFilter === kind && popover.classList.contains('open')) return closePromoFilter();
+  activePromoFilter = kind; activePromoFilterButton = button;
+  $('#promo-filter-title').textContent = kind === 'brand' ? 'Filtrar por marca' : 'Filtrar por categoría';
+  $('#promo-filter-search').value = '';
+  renderPromoFilterPopover();
+  const bounds = button.getBoundingClientRect();
+  popover.style.top = `${bounds.bottom + 5}px`;
+  popover.style.left = `${Math.max(8, Math.min(bounds.left, window.innerWidth - 285))}px`;
+  popover.classList.add('open');
+}
+function closePromoFilter() { $('#promo-filter-popover')?.classList.remove('open'); activePromoFilter = null; activePromoFilterButton = null; }
 
 function normalize(source) {
   const category = (source.categories?.[0] || '').split('/').filter(Boolean).join(' › ');
@@ -88,14 +132,31 @@ async function loadPromotions(refresh = false) {
 function filtered() {
   const words = query.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const onlyDiscount = mode === 'discounts' || $('#only-discount').checked;
-  return products.filter(p => {
+  let list = products.filter(p => {
     const text = `${p.name} ${p.brand} ${p.category} ${p.sku} ${p.ean} ${p.reference}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     return (!words || text.includes(words)) && (!onlyDiscount || isDiscounted(p));
+  });
+  if (mode !== 'discounts') return list;
+  if (promoBrands !== null) list = list.filter(product => promoBrands.has(product.brand));
+  if (promoCategories !== null) list = list.filter(product => promoCategories.has(promoCategory(product)));
+  const valueFor = product => ({
+    name: product.name, brand: product.brand, category: promoCategory(product), price: product.price,
+    list: product.list, saving: product.list - product.price, discount: discount(product)
+  })[promoSortKey];
+  return list.sort((a, b) => {
+    const av = valueFor(a), bv = valueFor(b);
+    return typeof av === 'string' ? av.localeCompare(bv, 'es') * promoSortDir : (av - bv) * promoSortDir;
   });
 }
 
 function row(p) {
   const pct = discount(p);
+  if (mode === 'discounts') return `<tr><td class="image-cell"><img src="${esc(p.images[0] || '')}" alt="" loading="lazy" data-open="${esc(p.id)}"></td>
+    <td><button class="name-button" data-open="${esc(p.id)}">${esc(p.name)}</button><div class="sub">SKU ${esc(p.sku)}${p.reference ? ` · Ref. ${esc(p.reference)}` : ''}</div></td>
+    <td><b>${esc(p.brand)}</b></td><td><span class="sub">${esc(promoCategory(p))}</span></td>
+    <td class="price-cell"><b>${money(p.price)}</b></td><td class="price-cell"><del>${money(p.list)}</del></td>
+    <td class="saving-cell">${money(p.list - p.price)}</td><td class="discount-cell"><span class="discount">-${pct}%</span></td>
+    <td class="actions"><button class="button secondary" data-open="${esc(p.id)}">Ver</button><button class="button primary" data-add="${esc(p.id)}" title="Añadir al presupuesto">+</button></td></tr>`;
   return `<tr><td class="image-cell"><img src="${esc(p.images[0] || '')}" alt="" loading="lazy" data-open="${esc(p.id)}"></td>
     <td><button class="name-button" data-open="${esc(p.id)}">${esc(p.name)}</button><div class="sub">SKU ${esc(p.sku)}${p.reference ? ` · Ref. ${esc(p.reference)}` : ''}</div></td>
     <td><b>${esc(p.brand)}</b><div class="sub clamp">${esc(p.category || 'Sin categoría publicada')}</div></td>
@@ -106,8 +167,9 @@ function row(p) {
 
 function render() {
   const list = filtered();
+  const activeFilters = mode === 'discounts' ? [promoBrands, promoCategories].filter(filter => filter !== null).length : 0;
   $('#count').textContent = mode === 'discounts'
-    ? `${list.length} producto${list.length === 1 ? '' : 's'} con descuento${promotionStatus}`
+    ? `${list.length} de ${products.length} producto${products.length === 1 ? '' : 's'} con descuento${activeFilters ? ` · ${activeFilters} filtro${activeFilters === 1 ? '' : 's'}` : ''}${promotionStatus}`
     : loading ? 'Consultando Walmart…' : `${list.length} producto${list.length === 1 ? '' : 's'}`;
   const hideMore = mode === 'discounts' || exhausted || loading || (mode === 'catalog' && query.trim().length < 2);
   $('#more').hidden = hideMore;
@@ -117,7 +179,12 @@ function render() {
     const message = loading ? 'Consultando el catálogo oficial…' : mode === 'discounts' ? 'No hay promociones publicadas en los lotes consultados.' : query.trim().length < 2 ? 'Escribe al menos dos caracteres para buscar en Walmart.' : 'No se encontraron productos con esos criterios.';
     $('#results').innerHTML = `<div class="empty">${message}</div>`; return;
   }
-  $('#results').innerHTML = `<table><thead><tr><th></th><th>Producto</th><th>Marca / categoría</th><th>Disponibilidad</th><th class="right">Precio</th><th></th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>`;
+  const arrow = key => promoSortKey === key ? (promoSortDir > 0 ? ' ▲' : ' ▼') : '';
+  const head = (label, key) => `<button class="promo-sort" data-promo-sort="${key}">${label}${arrow(key)}</button>`;
+  const filter = kind => `<button class="promo-filter ${promoFilterSet(kind) !== null ? 'active' : ''}" data-promo-filter="${kind}" title="Filtrar">▾</button>`;
+  const discountsHeader = `<tr><th></th><th class="promo-head">${head('Producto', 'name')}</th><th class="promo-head">${head('Marca', 'brand')}${filter('brand')}</th><th class="promo-head">${head('Categoría', 'category')}${filter('category')}</th><th class="right promo-head">${head('Precio actual', 'price')}</th><th class="right promo-head">${head('Precio lista', 'list')}</th><th class="right promo-head">${head('Ahorro', 'saving')}</th><th class="promo-head">${head('Descuento', 'discount')}</th><th></th></tr>`;
+  const catalogHeader = '<tr><th></th><th>Producto</th><th>Marca / categoría</th><th>Disponibilidad</th><th class="right">Precio</th><th></th></tr>';
+  $('#results').innerHTML = `<table class="${mode === 'discounts' ? 'promo-table' : ''}"><thead>${mode === 'discounts' ? discountsHeader : catalogHeader}</thead><tbody>${list.map(row).join('')}</tbody></table>`;
 }
 
 function showError(error) { $('#results').innerHTML = `<div class="empty error">No se pudo consultar Walmart: ${esc(error.message)}. Verifica que server.js esté activo.</div>`; }
@@ -154,11 +221,38 @@ $('#more').onclick = () => loadCatalog(false);
 $('#clear-budget').onclick = () => { budget = []; saveBudget(); renderBudget(); };
 $('#print-budget').onclick = () => window.print();
 document.addEventListener('click', event => {
+  const sort = event.target.closest('[data-promo-sort]');
+  const filterButton = event.target.closest('[data-promo-filter]');
+  const filterAction = event.target.closest('[data-promo-filter-action]');
+  if (sort) {
+    const key = sort.dataset.promoSort;
+    promoSortDir = promoSortKey === key ? -promoSortDir : (['price', 'list', 'saving', 'discount'].includes(key) ? -1 : 1);
+    promoSortKey = key; render(); return;
+  }
+  if (filterButton) { openPromoFilter(filterButton.dataset.promoFilter, filterButton); return; }
+  if (filterAction && activePromoFilter) {
+    const values = promoFilterValues(activePromoFilter);
+    setPromoFilterSet(activePromoFilter, filterAction.dataset.promoFilterAction === 'all' || filterAction.dataset.promoFilterAction === 'reset' ? null : new Set());
+    renderPromoFilterPopover(); render(); return;
+  }
+  if (event.target.id === 'promo-filter-close') { closePromoFilter(); return; }
+  if (activePromoFilter && !event.target.closest('#promo-filter-popover')) closePromoFilter();
   const open = event.target.closest('[data-open]'), add = event.target.closest('[data-add]'), qty = event.target.closest('[data-qty]'), image = event.target.closest('[data-image]');
   if (open) openModal(open.dataset.open); if (add) addBudget(add.dataset.add); if (qty) changeQty(qty.dataset.qty, Number(qty.dataset.change));
   if (image) { $('#main-image').src = image.dataset.image; document.querySelectorAll('.thumb').forEach(x => x.classList.toggle('selected', x === image)); }
   if (event.target.id === 'close-modal' || event.target.id === 'modal') $('#modal').classList.remove('open');
 });
+document.addEventListener('change', event => {
+  const input = event.target.closest('[data-promo-filter-item]');
+  if (!input || !activePromoFilter) return;
+  const values = promoFilterValues(activePromoFilter);
+  let selected = promoFilterSet(activePromoFilter) || new Set(values);
+  if (input.checked) selected.add(input.value); else selected.delete(input.value);
+  setPromoFilterSet(activePromoFilter, selected.size === values.length ? null : selected);
+  renderPromoFilterPopover(); render();
+});
+setupPromotionControls();
+$('#promo-filter-search')?.addEventListener('input', renderPromoFilterPopover);
 document.addEventListener('keydown', event => { if (event.key === 'Escape') $('#modal').classList.remove('open'); });
 $('#page-title').textContent = mode === 'discounts' ? 'Promociones' : 'Presupuestos';
 $('#promo-link').href = mode === 'discounts' ? '/ferreterias/walmart/presupuestos/' : '/ferreterias/walmart/descuentos/';
