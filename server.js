@@ -32,6 +32,8 @@ const REDIRECTS = {
   '/ferreterias/elhalcon/descuentos':           '/ferreterias/elhalcon/descuentos/',
   '/ferreterias/pricesmart/presupuestos':       '/ferreterias/pricesmart/presupuestos/',
   '/ferreterias/pricesmart/descuentos':         '/ferreterias/pricesmart/descuentos/',
+  '/ferreterias/walmart/presupuestos':          '/ferreterias/walmart/presupuestos/',
+  '/ferreterias/walmart/descuentos':            '/ferreterias/walmart/descuentos/',
 };
 
 // ── Alias específicos de rutas estáticas ────────────────────────────────────
@@ -115,6 +117,38 @@ http.createServer((req, res) => {
     return;
   }
 
+  // ── Proxy de catálogo público Walmart / VTEX ─────────────────────────────
+  // Sólo reenvía lecturas del catálogo: no transmite cookies, sesión ni datos
+  // del visitante a Walmart. La disponibilidad final depende de la sucursal
+  // seleccionada por el cliente en el sitio oficial.
+  if (pathname.startsWith('/api/walmart/catalog_system/pub/')) {
+    const apiPath = pathname.replace('/api/walmart', '');
+    const proxy = https.request(
+      {
+        host: 'www.walmart.com.ni',
+        path: apiPath + (url.search || ''),
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'user-agent': 'Mozilla/5.0 presupuestos-ferreterias'
+        }
+      },
+      (up) => {
+        res.writeHead(up.statusCode, {
+          'content-type': up.headers['content-type'] || 'application/json',
+          'access-control-allow-origin': '*'
+        });
+        up.pipe(res);
+      }
+    );
+    proxy.on('error', (e) => {
+      res.writeHead(502, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    });
+    proxy.end();
+    return;
+  }
+
   // ── Archivos estáticos ────────────────────────────────────────────────────
   let relPath  = ALIASES[pathname] || pathname.replace(/^\/+/, '');
   let fullPath = path.resolve(__dirname, relPath);
@@ -160,5 +194,7 @@ http.createServer((req, res) => {
   console.log('  El Halcón descuentos:  http://localhost:' + PORT + '/ferreterias/elhalcon/descuentos/');
   console.log('  PriceSmart presup.:    http://localhost:' + PORT + '/ferreterias/pricesmart/presupuestos/');
   console.log('  PriceSmart descuentos: http://localhost:' + PORT + '/ferreterias/pricesmart/descuentos/');
+  console.log('  Walmart presupuestos:  http://localhost:' + PORT + '/ferreterias/walmart/presupuestos/');
+  console.log('  Walmart descuentos:    http://localhost:' + PORT + '/ferreterias/walmart/descuentos/');
   console.log('');
 });

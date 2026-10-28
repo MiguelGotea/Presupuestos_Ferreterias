@@ -555,6 +555,13 @@
     .card.card-pricesmart:hover .action-circle { background: #2449a5; border-color: #2449a5; color: #fff; }
     .card-provider.pricesmart { color: #2449a5; }
 
+    /* WALMART */
+    .walmart-brand-badge { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: #0071ce; color: #ffc220; font-size: 21px; font-weight: 800; letter-spacing: -2px; }
+    .card.card-walmart { border-color: #a8d1f4; }
+    .card.card-walmart:hover { border-color: #0071ce; box-shadow: 0 8px 28px rgba(0, 113, 206, .17); }
+    .card.card-walmart:hover .action-circle { background: #0071ce; border-color: #0071ce; color: #fff; }
+    .card-provider.walmart { color: #0071ce; }
+
     /* ESTADO PRÓXIMAMENTE */
     .card.soon {
       background: #faf8f5;
@@ -698,6 +705,42 @@
             <span>Abrir</span>
             <div class="action-circle">→</div>
           </div>
+        </div>
+      </a>
+
+      <!-- WALMART: PRESUPUESTOS -->
+      <a class="card card-walmart" href="/ferreterias/walmart/presupuestos/" id="card-walmart-presupuestos"
+        data-title="walmart presupuestos cotizador catalogo precios en linea vtex">
+        <div class="card-top">
+          <div class="walmart-brand-badge" title="Walmart Nicaragua">W✦</div>
+          <span class="status-pill active">En línea</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider walmart">Walmart Nicaragua · Catálogo en vivo</div>
+          <h2>Cotizador de Presupuestos</h2>
+          <p>Busca productos del catálogo oficial, consulta precios y disponibilidad publicados y arma presupuestos en córdobas.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags"><span class="tag">Precios en vivo</span><span class="tag">Presupuestos</span><span class="tag">VTEX</span></div>
+          <div class="card-action-btn"><span>Abrir</span><div class="action-circle">→</div></div>
+        </div>
+      </a>
+
+      <!-- WALMART: DESCUENTOS -->
+      <a class="card card-walmart" href="/ferreterias/walmart/descuentos/" id="card-walmart-descuentos"
+        data-title="walmart descuentos promociones rebajas ofertas precio anterior">
+        <div class="card-top">
+          <div class="walmart-brand-badge" title="Walmart Nicaragua">W✦</div>
+          <span class="status-pill active">En línea</span>
+        </div>
+        <div class="card-body">
+          <div class="card-provider walmart">Walmart Nicaragua · Rebajas</div>
+          <h2>Descuentos y Promociones</h2>
+          <p>Explora las campañas públicas de rebajas con precio actual, precio anterior, ahorro y porcentaje calculado.</p>
+        </div>
+        <div class="card-footer">
+          <div class="card-tags"><span class="tag promo">% Descuentos</span><span class="tag">Rebajas</span><span class="tag">Ahorro</span></div>
+          <div class="card-action-btn"><span>Ver ofertas</span><div class="action-circle">→</div></div>
         </div>
       </a>
 
@@ -921,6 +964,10 @@
         <a href="/ferreterias/pricesmart/presupuestos/" class="footer-link">PriceSmart Presupuestos</a>
         <span>·</span>
         <a href="/ferreterias/pricesmart/descuentos/" class="footer-link">PriceSmart Descuentos</a>
+        <span>·</span>
+        <a href="/ferreterias/walmart/presupuestos/" class="footer-link">Walmart Presupuestos</a>
+        <span>·</span>
+        <a href="/ferreterias/walmart/descuentos/" class="footer-link">Walmart Descuentos</a>
       </div>
     </div>
   </footer>
