@@ -1,5 +1,6 @@
 const API = '/api/walmart/catalog_system/pub/products/search';
 const PAGE_SIZE = 50;
+const PROMOTIONS_PAGE_SIZE = 100;
 const $ = s => document.querySelector(s);
 const money = n => 'C$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
@@ -8,7 +9,7 @@ const discount = p => p.list > p.price ? Math.round((1 - p.price / p.list) * 100
 const isDiscounted = p => p.list > p.price;
 
 
-let query = '', offset = 0, exhausted = false, loading = false, products = [], timer, promoTimer, promotionStatus = '', promotionOffset = 0;
+let query = '', offset = 0, exhausted = false, loading = false, products = [], timer, promoTimer, promotionStatus = '', promotionOffset = 0, promotionTotal = 0;
 const pool = new Map();
 let budget = JSON.parse(localStorage.getItem('walmart-budget') || '[]');
 let promoSortKey = 'discount', promoSortDir = -1;
@@ -102,29 +103,34 @@ async function loadCatalog(reset = true) {
   loading = false; render();
 }
 
-async function loadPromotions(refresh = false) {
+async function loadPromotions(refresh = false, nextPage = false) {
   if (loading) return;
   clearTimeout(promoTimer);
   if (refresh) {
     products = [];
     pool.clear();
     promotionOffset = 0;
+    promotionTotal = 0;
   }
   loading = true; render();
   try {
-    const params = new URLSearchParams({ from: String(promotionOffset) });
+    const params = new URLSearchParams({ from: String(promotionOffset), limit: String(PROMOTIONS_PAGE_SIZE) });
     if (refresh) params.set('refresh', '1');
     const response = await fetch(`/api/walmart/promotions?${params}`);
     if (!response.ok) throw new Error(`El explorador respondió HTTP ${response.status}`);
     const scan = await response.json();
-    append((scan.products || []).flatMap(normalize).filter(isDiscounted));
-    promotionOffset = Number(scan.count || promotionOffset);
-    exhausted = !scan.running;
+    const received = (scan.products || []).flatMap(normalize).filter(isDiscounted);
+    append(received);
+    promotionOffset += received.length;
+    promotionTotal = Number(scan.count || 0);
+    exhausted = !scan.running && promotionOffset >= promotionTotal;
     promotionStatus = scan.running
       ? ` · explorando ${Number(scan.scanned || 0).toLocaleString('es-NI')}${scan.total ? ` de ${Number(scan.total).toLocaleString('es-NI')}` : ''}`
-      : scan.completedAt ? ` · catálogo completo explorado` : '';
+      : scan.completedAt ? ' · actualizado' : '';
     if (scan.error) promotionStatus = ` · error de exploración: ${scan.error}`;
-    else if (scan.running) promoTimer = setTimeout(() => loadPromotions(false), 1200);
+    // Mientras el VPS sigue explorando, sólo se sondea si ya se consumieron los
+    // descuentos disponibles; no se renderizan miles de filas de una sola vez.
+    else if (scan.running && !nextPage && received.length < PROMOTIONS_PAGE_SIZE) promoTimer = setTimeout(() => loadPromotions(false), 1500);
   } catch (error) { promotionStatus = ''; showError(error); }
   loading = false; render();
 }
@@ -171,10 +177,11 @@ function render() {
   $('#count').textContent = mode === 'discounts'
     ? `${list.length} de ${products.length} producto${products.length === 1 ? '' : 's'} con descuento${activeFilters ? ` · ${activeFilters} filtro${activeFilters === 1 ? '' : 's'}` : ''}${promotionStatus}`
     : loading ? 'Consultando Walmart…' : `${list.length} producto${list.length === 1 ? '' : 's'}`;
-  const hideMore = mode === 'discounts' || exhausted || loading || (mode === 'catalog' && query.trim().length < 2);
+  const canLoadMorePromotions = mode === 'discounts' && (promotionOffset < promotionTotal || (loading === false && promotionStatus.includes('explorando')));
+  const hideMore = mode === 'discounts' ? !canLoadMorePromotions : exhausted || loading || query.trim().length < 2;
   $('#more').hidden = hideMore;
   $('#more').style.display = hideMore ? 'none' : 'inline-block';
-  $('#more').textContent = loading ? 'Consultando…' : mode === 'discounts' ? 'Cargar más promociones' : 'Cargar más resultados';
+  $('#more').textContent = loading ? 'Consultando…' : mode === 'discounts' ? 'Cargar 100 descuentos más' : 'Cargar más resultados';
   if (!list.length) {
     const message = loading ? 'Consultando el catálogo oficial…' : mode === 'discounts' ? 'No hay promociones publicadas en los lotes consultados.' : query.trim().length < 2 ? 'Escribe al menos dos caracteres para buscar en Walmart.' : 'No se encontraron productos con esos criterios.';
     $('#results').innerHTML = `<div class="empty">${message}</div>`; return;
@@ -217,7 +224,7 @@ function renderBudget() {
 
 $('#query').addEventListener('input', event => { query = event.target.value; clearTimeout(timer); timer = setTimeout(() => mode === 'discounts' ? render() : loadCatalog(true), 300); });
 $('#only-discount').addEventListener('change', render);
-$('#more').onclick = () => loadCatalog(false);
+$('#more').onclick = () => mode === 'discounts' ? loadPromotions(false, true) : loadCatalog(false);
 $('#clear-budget').onclick = () => { budget = []; saveBudget(); renderBudget(); };
 $('#print-budget').onclick = () => window.print();
 document.addEventListener('click', event => {

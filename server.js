@@ -162,7 +162,11 @@ async function scanWalmartPromotions() {
             seen.add(key);
             return true;
           });
-          if (product.items.length) walmartPromotions.items.push(product);
+          // Un registro por SKU: permite paginar promociones sin separar las
+          // variantes de un mismo producto en el navegador.
+          for (const item of product.items) {
+            walmartPromotions.items.push({ ...product, items: [item] });
+          }
         }
         if (page.products.length < WALMART_PAGE_SIZE) break;
         // Cadencia deliberadamente moderada: es una exploración de fondo, no
@@ -307,6 +311,7 @@ http.createServer((req, res) => {
       'access-control-allow-origin': '*'
     });
     const from = Math.max(0, Number(url.searchParams.get('from')) || 0);
+    const limit = Math.max(0, Math.min(100, Number(url.searchParams.get('limit')) || 100));
     return res.end(JSON.stringify({
       running: walmartPromotions.running,
       total: walmartPromotions.total,
@@ -314,9 +319,9 @@ http.createServer((req, res) => {
       count: walmartPromotions.items.length,
       completedAt: walmartPromotions.completedAt,
       error: walmartPromotions.error,
-      // Cada visitante recibe sólo los descuentos agregados desde su último
-      // sondeo; evita reenviar el catálogo acumulado cada pocos segundos.
-      products: walmartPromotions.items.slice(from)
+      // La lista se entrega paginada: la interfaz no necesita renderizar miles
+      // de tarjetas a la vez ni reenviar el catálogo completo en cada sondeo.
+      products: walmartPromotions.items.slice(from, from + limit)
     }));
   }
 
